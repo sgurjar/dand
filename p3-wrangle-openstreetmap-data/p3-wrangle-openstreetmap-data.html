@@ -1,0 +1,989 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Satyendra Gurjar" />
+  <title>P3: Wrangle OpenStreetMap Data</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+  </style>
+  <style type="text/css">
+  /*! normalize.css v4.2.0 | MIT License | github.com/necolas/normalize.css */
+  
+  /**
+   * 1. Change the default font family in all browsers (opinionated).
+   * 2. Correct the line height in all browsers.
+   * 3. Prevent adjustments of font size after orientation changes in IE and iOS.
+   */
+  
+  html {
+    font-family: sans-serif; /* 1 */
+    line-height: 1.15; /* 2 */
+    -ms-text-size-adjust: 100%; /* 3 */
+    -webkit-text-size-adjust: 100%; /* 3 */
+  }
+  
+  /**
+   * Remove the margin in all browsers (opinionated).
+   */
+  
+  body {
+    margin: 10;
+  }
+  
+  /* HTML5 display definitions
+     ========================================================================== */
+  
+  /**
+   * Add the correct display in IE 9-.
+   * 1. Add the correct display in Edge, IE, and Firefox.
+   * 2. Add the correct display in IE.
+   */
+  
+  article,
+  aside,
+  details, /* 1 */
+  figcaption,
+  figure,
+  footer,
+  header,
+  main, /* 2 */
+  menu,
+  nav,
+  section,
+  summary { /* 1 */
+    display: block;
+  }
+  
+  /**
+   * Add the correct display in IE 9-.
+   */
+  
+  audio,
+  canvas,
+  progress,
+  video {
+    display: inline-block;
+  }
+  
+  /**
+   * Add the correct display in iOS 4-7.
+   */
+  
+  audio:not([controls]) {
+    display: none;
+    height: 0;
+  }
+  
+  /**
+   * Add the correct vertical alignment in Chrome, Firefox, and Opera.
+   */
+  
+  progress {
+    vertical-align: baseline;
+  }
+  
+  /**
+   * Add the correct display in IE 10-.
+   * 1. Add the correct display in IE.
+   */
+  
+  template, /* 1 */
+  [hidden] {
+    display: none;
+  }
+  
+  /* Links
+     ========================================================================== */
+  
+  /**
+   * 1. Remove the gray background on active links in IE 10.
+   * 2. Remove gaps in links underline in iOS 8+ and Safari 8+.
+   */
+  
+  a {
+    background-color: transparent; /* 1 */
+    -webkit-text-decoration-skip: objects; /* 2 */
+  }
+  
+  /**
+   * Remove the outline on focused links when they are also active or hovered
+   * in all browsers (opinionated).
+   */
+  
+  a:active,
+  a:hover {
+    outline-width: 0;
+  }
+  
+  /* Text-level semantics
+     ========================================================================== */
+  
+  /**
+   * 1. Remove the bottom border in Firefox 39-.
+   * 2. Add the correct text decoration in Chrome, Edge, IE, Opera, and Safari.
+   */
+  
+  abbr[title] {
+    border-bottom: none; /* 1 */
+    text-decoration: underline; /* 2 */
+    text-decoration: underline dotted; /* 2 */
+  }
+  
+  /**
+   * Prevent the duplicate application of `bolder` by the next rule in Safari 6.
+   */
+  
+  b,
+  strong {
+    font-weight: inherit;
+  }
+  
+  /**
+   * Add the correct font weight in Chrome, Edge, and Safari.
+   */
+  
+  b,
+  strong {
+    font-weight: bolder;
+  }
+  
+  /**
+   * Add the correct font style in Android 4.3-.
+   */
+  
+  dfn {
+    font-style: italic;
+  }
+  
+  /**
+   * Correct the font size and margin on `h1` elements within `section` and
+   * `article` contexts in Chrome, Firefox, and Safari.
+   */
+  
+  h1 {
+    font-size: 2em;
+    margin: 0.67em 0;
+  }
+  
+  /**
+   * Add the correct background and color in IE 9-.
+   */
+  
+  mark {
+    background-color: #ff0;
+    color: #000;
+  }
+  
+  /**
+   * Add the correct font size in all browsers.
+   */
+  
+  small {
+    font-size: 80%;
+  }
+  
+  /**
+   * Prevent `sub` and `sup` elements from affecting the line height in
+   * all browsers.
+   */
+  
+  sub,
+  sup {
+    font-size: 75%;
+    line-height: 0;
+    position: relative;
+    vertical-align: baseline;
+  }
+  
+  sub {
+    bottom: -0.25em;
+  }
+  
+  sup {
+    top: -0.5em;
+  }
+  
+  /* Embedded content
+     ========================================================================== */
+  
+  /**
+   * Remove the border on images inside links in IE 10-.
+   */
+  
+  img {
+    border-style: none;
+  }
+  
+  /**
+   * Hide the overflow in IE.
+   */
+  
+  svg:not(:root) {
+    overflow: hidden;
+  }
+  
+  /* Grouping content
+     ========================================================================== */
+  
+  /**
+   * 1. Correct the inheritance and scaling of font size in all browsers.
+   * 2. Correct the odd `em` font sizing in all browsers.
+   */
+  
+  code,
+  kbd,
+  pre,
+  samp {
+    font-family: monospace, monospace; /* 1 */
+    font-size: 1em; /* 2 */
+  }
+  
+  /**
+   * Add the correct margin in IE 8.
+   */
+  
+  figure {
+    margin: 1em 40px;
+  }
+  
+  /**
+   * 1. Add the correct box sizing in Firefox.
+   * 2. Show the overflow in Edge and IE.
+   */
+  
+  hr {
+    box-sizing: content-box; /* 1 */
+    height: 0; /* 1 */
+    overflow: visible; /* 2 */
+  }
+  
+  /* Forms
+     ========================================================================== */
+  
+  /**
+   * 1. Change font properties to `inherit` in all browsers (opinionated).
+   * 2. Remove the margin in Firefox and Safari.
+   */
+  
+  button,
+  input,
+  optgroup,
+  select,
+  textarea {
+    font: inherit; /* 1 */
+    margin: 0; /* 2 */
+  }
+  
+  /**
+   * Restore the font weight unset by the previous rule.
+   */
+  
+  optgroup {
+    font-weight: bold;
+  }
+  
+  /**
+   * Show the overflow in IE.
+   * 1. Show the overflow in Edge.
+   */
+  
+  button,
+  input { /* 1 */
+    overflow: visible;
+  }
+  
+  /**
+   * Remove the inheritance of text transform in Edge, Firefox, and IE.
+   * 1. Remove the inheritance of text transform in Firefox.
+   */
+  
+  button,
+  select { /* 1 */
+    text-transform: none;
+  }
+  
+  /**
+   * 1. Prevent a WebKit bug where (2) destroys native `audio` and `video`
+   *    controls in Android 4.
+   * 2. Correct the inability to style clickable types in iOS and Safari.
+   */
+  
+  button,
+  html [type="button"], /* 1 */
+  [type="reset"],
+  [type="submit"] {
+    -webkit-appearance: button; /* 2 */
+  }
+  
+  /**
+   * Remove the inner border and padding in Firefox.
+   */
+  
+  button::-moz-focus-inner,
+  [type="button"]::-moz-focus-inner,
+  [type="reset"]::-moz-focus-inner,
+  [type="submit"]::-moz-focus-inner {
+    border-style: none;
+    padding: 0;
+  }
+  
+  /**
+   * Restore the focus styles unset by the previous rule.
+   */
+  
+  button:-moz-focusring,
+  [type="button"]:-moz-focusring,
+  [type="reset"]:-moz-focusring,
+  [type="submit"]:-moz-focusring {
+    outline: 1px dotted ButtonText;
+  }
+  
+  /**
+   * Change the border, margin, and padding in all browsers (opinionated).
+   */
+  
+  fieldset {
+    border: 1px solid #c0c0c0;
+    margin: 0 2px;
+    padding: 0.35em 0.625em 0.75em;
+  }
+  
+  /**
+   * 1. Correct the text wrapping in Edge and IE.
+   * 2. Correct the color inheritance from `fieldset` elements in IE.
+   * 3. Remove the padding so developers are not caught out when they zero out
+   *    `fieldset` elements in all browsers.
+   */
+  
+  legend {
+    box-sizing: border-box; /* 1 */
+    color: inherit; /* 2 */
+    display: table; /* 1 */
+    max-width: 100%; /* 1 */
+    padding: 0; /* 3 */
+    white-space: normal; /* 1 */
+  }
+  
+  /**
+   * Remove the default vertical scrollbar in IE.
+   */
+  
+  textarea {
+    overflow: auto;
+  }
+  
+  /**
+   * 1. Add the correct box sizing in IE 10-.
+   * 2. Remove the padding in IE 10-.
+   */
+  
+  [type="checkbox"],
+  [type="radio"] {
+    box-sizing: border-box; /* 1 */
+    padding: 0; /* 2 */
+  }
+  
+  /**
+   * Correct the cursor style of increment and decrement buttons in Chrome.
+   */
+  
+  [type="number"]::-webkit-inner-spin-button,
+  [type="number"]::-webkit-outer-spin-button {
+    height: auto;
+  }
+  
+  /**
+   * 1. Correct the odd appearance in Chrome and Safari.
+   * 2. Correct the outline style in Safari.
+   */
+  
+  [type="search"] {
+    -webkit-appearance: textfield; /* 1 */
+    outline-offset: -2px; /* 2 */
+  }
+  
+  /**
+   * Remove the inner padding and cancel buttons in Chrome and Safari on OS X.
+   */
+  
+  [type="search"]::-webkit-search-cancel-button,
+  [type="search"]::-webkit-search-decoration {
+    -webkit-appearance: none;
+  }
+  
+  /**
+   * Correct the text style of placeholders in Chrome, Edge, and Safari.
+   */
+  
+  ::-webkit-input-placeholder {
+    color: inherit;
+    opacity: 0.54;
+  }
+  
+  /**
+   * 1. Correct the inability to style clickable types in iOS and Safari.
+   * 2. Change font properties to `inherit` in Safari.
+   */
+  
+  ::-webkit-file-upload-button {
+    -webkit-appearance: button; /* 1 */
+    font: inherit; /* 2 */
+  }
+  </style>
+</head>
+<body>
+<div id="header">
+<h1 class="title">P3: Wrangle OpenStreetMap Data</h1>
+<h2 class="author">Data Analyst Nanodegree</h2>
+<h3 class="date">Satyendra Gurjar</h3>
+</div>
+<h1 id="problems-encountered-in-your-map">Problems encountered in your map</h1>
+<h2 id="type-attribute"><code>type</code> attribute</h2>
+<p>According to specficied schema, <code>type</code> key suppose to store <code>node</code> or <code>way</code>, however some <code>&lt;node&gt;</code> and <code>&lt;way&gt;</code> contains <code>&lt;tag&gt;</code> that has <code>type</code> key.</p>
+<div class="sourceCode"><pre class="sourceCode xml"><code class="sourceCode xml">  <span class="kw">&lt;node</span><span class="ot"> id=</span><span class="st">&quot;3281323298&quot;</span><span class="ot"> lat=</span><span class="st">&quot;32.8772243&quot;</span><span class="ot"> lon=</span><span class="st">&quot;-117.2402912&quot;</span><span class="ot"> version=</span><span class="st">&quot;2&quot;</span>
+<span class="ot">          timestamp=</span><span class="st">&quot;2016-02-23T21:34:47Z&quot;</span><span class="ot"> changeset=</span><span class="st">&quot;37399686&quot;</span><span class="ot"> uid=</span><span class="st">&quot;2733383&quot;</span>
+<span class="ot">          user=</span><span class="st">&quot;Trising&quot;</span><span class="kw">&gt;</span>
+      <span class="kw">&lt;tag</span><span class="ot"> k=</span><span class="st">&quot;name&quot;</span><span class="ot"> v=</span><span class="st">&quot;KSDT&quot;</span><span class="kw">/&gt;</span>
+      <span class="kw">&lt;tag</span><span class="ot"> k=</span><span class="st">&quot;type&quot;</span><span class="ot"> v=</span><span class="st">&quot;radio&quot;</span><span class="kw">/&gt;</span>
+      <span class="kw">&lt;tag</span><span class="ot"> k=</span><span class="st">&quot;amenity&quot;</span><span class="ot"> v=</span><span class="st">&quot;studio&quot;</span><span class="kw">/&gt;</span>
+  <span class="kw">&lt;/node&gt;</span>
+
+  <span class="kw">&lt;way</span><span class="ot"> id=</span><span class="st">&quot;44500833&quot;</span><span class="ot"> version=</span><span class="st">&quot;2&quot;</span><span class="ot"> timestamp=</span><span class="st">&quot;2015-07-05T18:21:48Z&quot;</span>
+<span class="ot">          changeset=</span><span class="st">&quot;32432309&quot;</span><span class="ot"> uid=</span><span class="st">&quot;292665&quot;</span><span class="ot"> user=</span><span class="st">&quot;Dr Kludge&quot;</span><span class="kw">&gt;</span>
+      <span class="kw">&lt;nd</span><span class="ot"> ref=</span><span class="st">&quot;565337131&quot;</span><span class="kw">/&gt;</span>
+      <span class="kw">&lt;nd</span><span class="ot"> ref=</span><span class="st">&quot;565337128&quot;</span><span class="kw">/&gt;</span>
+      ...
+      <span class="kw">&lt;tag</span><span class="ot"> k=</span><span class="st">&quot;name&quot;</span><span class="ot"> v=</span><span class="st">&quot;City Operations Building&quot;</span><span class="kw">/&gt;</span>
+      <span class="kw">&lt;tag</span><span class="ot"> k=</span><span class="st">&quot;type&quot;</span><span class="ot"> v=</span><span class="st">&quot;governmental&quot;</span><span class="kw">/&gt;</span>
+      <span class="kw">&lt;tag</span><span class="ot"> k=</span><span class="st">&quot;source&quot;</span><span class="ot"> v=</span><span class="st">&quot;Tiger2009&quot;</span><span class="kw">/&gt;</span>
+      <span class="kw">&lt;tag</span><span class="ot"> k=</span><span class="st">&quot;landuse&quot;</span><span class="ot"> v=</span><span class="st">&quot;commercial&quot;</span><span class="kw">/&gt;</span>
+      ...
+  <span class="kw">&lt;/way&gt;</span></code></pre></div>
+<p>Since we store all the <code>&lt;tag&gt;</code> as key (<code>k</code>), value (<code>v</code>). <code>type</code> here collide with the <code>type</code> we created for <code>node</code> and <code>way</code>. So we decided to create a <code>_type</code> attribute. This was discovered after we imported data in mongodb and tried to count number of <code>node</code> and <code>way</code>. Mongodb query returned:</p>
+<div class="sourceCode"><pre class="sourceCode python"><code class="sourceCode python">  db.sandiego.aggregate([{<span class="st">&quot;$group&quot;</span>: {<span class="st">&quot;_id&quot;</span>: <span class="st">&quot;$type&quot;</span>, <span class="st">&quot;count&quot;</span>: {<span class="st">&quot;$sum&quot;</span>: <span class="dv">1</span>}}}])
+
+  {<span class="st">u&#39;count&#39;</span>: <span class="dv">1</span>, <span class="st">u&#39;_id&#39;</span>: [<span class="st">u&#39;node&#39;</span>, <span class="st">u&#39;radio&#39;</span>]}
+  {<span class="st">u&#39;count&#39;</span>: <span class="dv">994684</span>, <span class="st">u&#39;_id&#39;</span>: <span class="st">u&#39;node&#39;</span>}
+  {<span class="st">u&#39;count&#39;</span>: <span class="dv">17</span>, <span class="st">u&#39;_id&#39;</span>: [<span class="st">u&#39;way&#39;</span>, <span class="st">u&#39;route&#39;</span>]}
+  {<span class="st">u&#39;count&#39;</span>: <span class="dv">1</span>, <span class="st">u&#39;_id&#39;</span>: [<span class="st">u&#39;node&#39;</span>, <span class="st">u&#39;video&#39;</span>]}
+  {<span class="st">u&#39;count&#39;</span>: <span class="dv">75</span>, <span class="st">u&#39;_id&#39;</span>: [<span class="st">u&#39;node&#39;</span>, <span class="st">u&#39;palm&#39;</span>]}
+  {<span class="st">u&#39;count&#39;</span>: <span class="dv">3</span>, <span class="st">u&#39;_id&#39;</span>: [<span class="st">u&#39;node&#39;</span>, <span class="st">u&#39;site&#39;</span>]}
+  {<span class="st">u&#39;count&#39;</span>: <span class="dv">1</span>, <span class="st">u&#39;_id&#39;</span>: [<span class="st">u&#39;node&#39;</span>, <span class="st">u&#39;conifer&#39;</span>]}
+  {<span class="st">u&#39;count&#39;</span>: <span class="dv">1</span>, <span class="st">u&#39;_id&#39;</span>: [<span class="st">u&#39;node&#39;</span>, <span class="st">u&#39;associateStreet&#39;</span>]}
+  {<span class="st">u&#39;count&#39;</span>: <span class="dv">77607</span>, <span class="st">u&#39;_id&#39;</span>: <span class="st">u&#39;way&#39;</span>}
+  {<span class="st">u&#39;count&#39;</span>: <span class="dv">1</span>, <span class="st">u&#39;_id&#39;</span>: [<span class="st">u&#39;way&#39;</span>, <span class="st">u&#39;dance&#39;</span>]}
+  {<span class="st">u&#39;count&#39;</span>: <span class="dv">4</span>, <span class="st">u&#39;_id&#39;</span>: [<span class="st">u&#39;way&#39;</span>, <span class="st">u&#39;governmental&#39;</span>]}
+  {<span class="st">u&#39;count&#39;</span>: <span class="dv">1</span>, <span class="st">u&#39;_id&#39;</span>: [<span class="st">u&#39;way&#39;</span>, <span class="st">u&#39;FIXME&#39;</span>]}
+  {<span class="st">u&#39;count&#39;</span>: <span class="dv">1</span>, <span class="st">u&#39;_id&#39;</span>: [<span class="st">u&#39;way&#39;</span>, <span class="st">u&#39;public&#39;</span>]}
+  {<span class="st">u&#39;count&#39;</span>: <span class="dv">4</span>, <span class="st">u&#39;_id&#39;</span>: [<span class="st">u&#39;way&#39;</span>, <span class="st">u&#39;boundary&#39;</span>]}
+  {<span class="st">u&#39;count&#39;</span>: <span class="dv">1</span>, <span class="st">u&#39;_id&#39;</span>: [<span class="st">u&#39;way&#39;</span>, <span class="st">u&#39;civil&#39;</span>]}
+  {<span class="st">u&#39;count&#39;</span>: <span class="dv">1</span>, <span class="st">u&#39;_id&#39;</span>: [<span class="st">u&#39;way&#39;</span>, <span class="st">u&#39;gless&#39;</span>]}</code></pre></div>
+<p>Here some of the <code>_id</code> are array, because in our parsing code we create array if key already exists.</p>
+<h2 id="street-name">Street Name</h2>
+<ul>
+<li><p>Street names in the data, (<code>&lt;tag&gt;</code> with <code>k=addr:street</code>) using different notations to refer to same thing. For example, <code>Avenue</code> is written as <code>Av</code>, <code>Ave</code>, <code>Ave.</code> and <code>Avenue</code>. Similarly, <code>Boulevard</code> is written as <code>Blvd</code>, <code>Blvd.</code> and <code>Boulevard</code>.</p></li>
+<li><p>Function <code>update_name</code> in <code>audit.py</code> uses a mapping of street name to street name provided in the data and returns updated street name.</p></li>
+<li><p><code>update_name</code> is called from <code>clean_value</code> and <code>audit.clean_value</code> is called from <code>shape_element</code> of <code>data.py</code>.</p></li>
+</ul>
+<h2 id="state">State</h2>
+<ul>
+<li><p>State for San Diego, California, (<code>&lt;tag&gt;</code> with <code>k=addr:state</code>) is written as different values- <code>CA</code>, <code>Ca</code>, <code>California</code>, and <code>ca</code>.</p></li>
+<li><p>Function <code>update_state</code> in <code>audit.py</code> take state name as input and returns std state name, <code>CA</code> as output.</p></li>
+<li><p><code>update_state</code> is called from <code>clean_value</code> and <code>audit.clean_value</code> is called from <code>shape_element</code> of <code>data.py</code>.</p></li>
+</ul>
+<h2 id="phone">Phone</h2>
+<ul>
+<li><p>Phone values in data, (<code>&lt;tag&gt;</code> with <code>k=phone</code>), are in multiple formats. We want to keep phone numbers 10 digits.</p></li>
+<li><p>In <code>update_phone</code> function in <code>audit.py</code> we used regular expression that (<code>r'^\+1|[-()]|\s'</code>) that removes <code>+1</code>, <code>-</code>, <code>(</code>, <code>)</code> and all white spaces.</p></li>
+<li><p><code>update_phone</code> is called from <code>clean_value</code> and <code>audit.clean_value</code> is called from <code>shape_element</code> of <code>data.py</code>.</p></li>
+</ul>
+<h2 id="postcode">Postcode</h2>
+<ul>
+<li>Some of the postcodes in data (<code>&lt;tag&gt;</code> with <code>k=addr:postcode</code>) are in invalid format. For example,</li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode xml"><code class="sourceCode xml">  <span class="kw">&lt;tag</span><span class="ot"> k=</span><span class="st">&quot;addr:postcode&quot;</span><span class="ot"> v=</span><span class="st">&quot;CA 91914&quot;</span><span class="kw">/&gt;</span>
+  <span class="kw">&lt;tag</span><span class="ot"> k=</span><span class="st">&quot;addr:postcode&quot;</span><span class="ot"> v=</span><span class="st">&quot;92101-3414, &quot;</span><span class="kw">/&gt;</span>
+  <span class="kw">&lt;tag</span><span class="ot"> k=</span><span class="st">&quot;addr:postcode&quot;</span><span class="ot"> v=</span><span class="st">&quot;Scripps Ranch Blvd.&quot;</span><span class="kw">/&gt;</span></code></pre></div>
+<ul>
+<li><p>We use <code>update_postcode</code> function in <code>audit.py</code> to clean postcodes. We keep numbers (<code>[0-9]</code>) and dash (<code>-</code>) and ignore rest, which could result in empty postcode for some of the invalid postcodes.</p></li>
+<li><p><code>update_postcode</code> is called from <code>clean_value</code> and <code>audit.clean_value</code> is called from <code>shape_element</code> of <code>data.py</code>.</p></li>
+</ul>
+<h1 id="overview-of-the-data">Overview of the data</h1>
+<ul>
+<li>Location: <a href="https://mapzen.com/data/metro-extracts/#san-diego-california">San Diego, California</a></li>
+<li>Extract File: <a href="https://s3.amazonaws.com/metro-extracts.mapzen.com/san-francisco-bay_california.osm.bz2">san-diego_california.osm</a></li>
+<li>Uncompressed Size: <strong>282MB</strong></li>
+</ul>
+<h2 id="parse-and-import">Parse and Import</h2>
+<ul>
+<li>XML data (<code>san-diego_california.osm</code>) is parsed into json file using <code>data.py</code>. <code>clean_value</code> function in <code>audit.py</code> is used for data clean up.</li>
+<li>Schema of the json document looks like following. Where <code>_type</code> can be <code>node</code> or <code>way</code>, as we are using only these two high level xml elements.</li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode json"><code class="sourceCode json">  <span class="fu">{</span>
+  <span class="dt">&quot;id&quot;</span><span class="fu">:</span> <span class="st">&quot;2406124091&quot;</span><span class="fu">,</span>
+  <span class="dt">&quot;_type: &quot;</span><span class="er">node</span><span class="dt">&quot;,</span>
+<span class="dt">  &quot;</span><span class="er">visible</span><span class="dt">&quot;:&quot;</span><span class="er">true</span><span class="dt">&quot;,</span>
+<span class="dt">  &quot;</span><span class="er">created</span><span class="dt">&quot;: {</span>
+<span class="dt">            &quot;</span><span class="er">version</span><span class="dt">&quot;:&quot;</span><span class="er">2</span><span class="dt">&quot;,</span>
+<span class="dt">            &quot;</span><span class="er">changeset</span><span class="dt">&quot;:&quot;</span><span class="er">17206049</span><span class="dt">&quot;,</span>
+<span class="dt">            &quot;</span><span class="er">timestamp</span><span class="dt">&quot;:&quot;</span><span class="er">2013-08-03T16</span><span class="fu">:</span><span class="dv">43</span><span class="er">:</span><span class="dv">42</span><span class="er">Z</span><span class="st">&quot;,</span>
+<span class="st">            &quot;</span><span class="er">user</span><span class="st">&quot;:&quot;</span><span class="er">linuxUser</span><span class="dv">16</span><span class="st">&quot;,</span>
+<span class="st">            &quot;</span><span class="er">uid</span><span class="st">&quot;:&quot;</span><span class="dv">1219059</span><span class="st">&quot;</span>
+<span class="st">          },</span>
+<span class="st">  &quot;</span><span class="er">pos</span><span class="st">&quot;: [41.9757030, -87.6921867],</span>
+<span class="st">  &quot;</span><span class="er">address</span><span class="st">&quot;: {</span>
+<span class="st">            &quot;</span><span class="er">housenumber</span><span class="st">&quot;: &quot;</span><span class="dv">5157</span><span class="st">&quot;,</span>
+<span class="st">            &quot;</span><span class="er">postcode</span><span class="st">&quot;: &quot;</span><span class="dv">60625</span><span class="st">&quot;,</span>
+<span class="st">            &quot;</span><span class="er">street</span><span class="st">&quot;: &quot;</span><span class="er">North</span> <span class="er">Lincoln</span> <span class="er">Ave</span><span class="st">&quot;</span>
+<span class="st">          },</span>
+<span class="st">  &quot;</span><span class="er">amenity</span><span class="st">&quot;: &quot;</span><span class="er">restaurant</span><span class="st">&quot;,</span>
+<span class="st">  &quot;</span><span class="er">cuisine</span><span class="st">&quot;: &quot;</span><span class="er">mexican</span><span class="st">&quot;,</span>
+<span class="st">  &quot;</span><span class="er">name</span><span class="st">&quot;: &quot;</span><span class="er">La</span> <span class="er">Cabana</span> <span class="er">De</span> <span class="er">Don</span> <span class="er">Luis</span><span class="st">&quot;,</span>
+<span class="st">  &quot;</span><span class="er">phone</span><span class="st">&quot;: &quot;</span><span class="dv">7732715176</span><span class="st">&quot;</span>
+<span class="st">  }</span></code></pre></div>
+<ul>
+<li>Once we create the json file <code>san-diego_california.osm.json</code>, we import it in mongo using <code>mongoimport</code></li>
+</ul>
+<pre class="text"><code>  $mongoimport /db:osm /collection:sandiego san-diego_california.osm.json</code></pre>
+<h2 id="statistics">Statistics</h2>
+<ul>
+<li>Are overview statistics of the dataset computed?
+<ul>
+<li>Database queries are used to provide a statistical overview of the dataset, like:
+<ul>
+<li>size of the file: 282MB</li>
+<li>number of unique users: 871</li>
+<li>number of nodes and ways: 994766 nodes, 77637 ways</li>
+<li>number of chosen type of nodes, like cafes, shops etc.</li>
+</ul></li>
+</ul></li>
+</ul>
+<pre class="text"><code>            parking          1866
+            place_of_worship 947
+            school           594
+            fast_food        571
+            restaurant       518
+            bar              268
+            cafe             164
+            fuel             137
+            bank             113
+            toilets          103</code></pre>
+<ul>
+<li>Are the database queries documented?
+<ul>
+<li>Source code for statistics is in <code>statistics.py</code>.</li>
+<li>Following are queries using pymongo.</li>
+</ul></li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode python"><code class="sourceCode python">dbstats <span class="op">=</span> db.command(<span class="st">&#39;dbstats&#39;</span>)
+colstats <span class="op">=</span> db.command(<span class="st">&#39;collstats&#39;</span>,<span class="st">&#39;sandiego&#39;</span>)
+
+<span class="co"># unique users</span>
+db.sandiego.aggregate([
+    {<span class="st">&quot;$group&quot;</span>: {<span class="st">&quot;_id&quot;</span>: <span class="st">&quot;$created.uid&quot;</span>}},
+    {<span class="st">&quot;$group&quot;</span>: {<span class="st">&quot;_id&quot;</span>: <span class="va">None</span>, <span class="st">&quot;count&quot;</span>: {<span class="st">&quot;$sum&quot;</span>: <span class="dv">1</span>}}}
+  ])
+
+<span class="co"># number of node and way</span>
+db.sandiego.aggregate([
+    {<span class="st">&quot;$group&quot;</span>: {<span class="st">&quot;_id&quot;</span>: <span class="st">&quot;$_type&quot;</span>, <span class="st">&quot;count&quot;</span>: {<span class="st">&quot;$sum&quot;</span>: <span class="dv">1</span>}}}
+  ])
+
+<span class="co"># top 10 contributors</span>
+db.sandiego.aggregate([
+    {<span class="st">&quot;$group&quot;</span>: {<span class="st">&quot;_id&quot;</span>: <span class="st">&quot;$created.user&quot;</span>, <span class="st">&quot;count&quot;</span>: {<span class="st">&quot;$sum&quot;</span>: <span class="dv">1</span>}}},
+    {<span class="st">&quot;$sort&quot;</span>: {<span class="st">&quot;count&quot;</span>: <span class="op">-</span><span class="dv">1</span>}},
+    {<span class="st">&quot;$limit&quot;</span>: <span class="dv">10</span>}
+  ])
+
+<span class="co"># top 10 amenity</span>
+db.sandiego.aggregate([
+    {<span class="st">&quot;$match&quot;</span>: {<span class="st">&quot;amenity&quot;</span>: {<span class="st">&quot;$ne&quot;</span>: <span class="va">None</span>}}}, <span class="co"># ignore nulls</span>
+    {<span class="st">&quot;$group&quot;</span>: {<span class="st">&quot;_id&quot;</span>: <span class="st">&quot;$amenity&quot;</span>, <span class="st">&quot;count&quot;</span>: {<span class="st">&quot;$sum&quot;</span>: <span class="dv">1</span>}}},
+    {<span class="st">&quot;$sort&quot;</span>: {<span class="st">&quot;count&quot;</span>:<span class="op">-</span><span class="dv">1</span>}},
+    {<span class="st">&quot;$limit&quot;</span>: <span class="dv">10</span>}
+  ])</code></pre></div>
+<h1 id="other-ideas-about-the-datasets">Other ideas about the datasets</h1>
+<h2 id="query-which-city-has-most-parking">Query: Which city has most parking ?</h2>
+<p>We wanted to use <code>parking</code> amenity for analysis, as topk query on amenity returns <code>parking</code> to be most available data.</p>
+<pre class="text"><code>  parking 1866
+  place_of_worship 947
+  school 594
+  fast_food 571
+  restaurant 518
+  bar 268
+  cafe 164
+  fuel 137
+  bank 113
+  toilets 103</code></pre>
+<p>However, it truns out most the documents (<code>way</code> and <code>node</code>) that have <code>parking</code> amenity attribute doesn’t have <code>city</code> data. <code>topk_cities_with_parking</code> in <code>queries.py</code>.</p>
+<ul>
+<li>Query</li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode python"><code class="sourceCode python">  db.sandiego.aggregate([
+      { <span class="st">&quot;$match&quot;</span>: { <span class="st">&quot;amenity&quot;</span>: { <span class="st">&quot;$eq&quot;</span>: <span class="st">&quot;parking&quot;</span> } } }
+     ,{ <span class="st">&quot;$project&quot;</span>: {<span class="st">&quot;_id&quot;</span>: <span class="dv">0</span>, <span class="st">&quot;city&quot;</span>: <span class="st">&quot;$address.city&quot;</span>, <span class="st">&quot;type&quot;</span>: <span class="st">&quot;$_type&quot;</span>} }
+     ,{ <span class="st">&quot;$group&quot;</span>: { <span class="st">&quot;_id&quot;</span>: {<span class="st">&quot;city&quot;</span>: <span class="st">&quot;$city&quot;</span>, <span class="st">&quot;type&quot;</span>: <span class="st">&quot;$type&quot;</span>}, <span class="st">&quot;count&quot;</span>: {<span class="st">&quot;$sum&quot;</span>: <span class="dv">1</span>} } }
+     ,{<span class="st">&quot;$sort&quot;</span>: {<span class="st">&quot;count&quot;</span>: <span class="op">-</span><span class="dv">1</span>}}
+     ,{<span class="st">&quot;$limit&quot;</span>: k}
+  ])</code></pre></div>
+<ul>
+<li>Result</li>
+</ul>
+<table>
+<thead>
+<tr class="header">
+<th align="left">type</th>
+<th align="left">city</th>
+<th align="left">count</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">way</td>
+<td align="left">None</td>
+<td align="left">1807</td>
+</tr>
+<tr class="even">
+<td align="left">node</td>
+<td align="left">None</td>
+<td align="left">31</td>
+</tr>
+<tr class="odd">
+<td align="left">way</td>
+<td align="left">San Diego</td>
+<td align="left">9</td>
+</tr>
+<tr class="even">
+<td align="left">way</td>
+<td align="left">La Mesa</td>
+<td align="left">5</td>
+</tr>
+<tr class="odd">
+<td align="left">way</td>
+<td align="left">Lakeside</td>
+<td align="left">2</td>
+</tr>
+<tr class="even">
+<td align="left">way</td>
+<td align="left">Spring Valley</td>
+<td align="left">2</td>
+</tr>
+<tr class="odd">
+<td align="left">way</td>
+<td align="left">Santee</td>
+<td align="left">2</td>
+</tr>
+<tr class="even">
+<td align="left">way</td>
+<td align="left">Chula Vista</td>
+<td align="left">2</td>
+</tr>
+<tr class="odd">
+<td align="left">node</td>
+<td align="left">Spring Valley</td>
+<td align="left">1</td>
+</tr>
+<tr class="even">
+<td align="left">way</td>
+<td align="left">Casa De Oro</td>
+<td align="left">1</td>
+</tr>
+</tbody>
+</table>
+<h2 id="using-reverse-geocoding-to-populate-missing-data.">Using reverse geocoding to populate missing data.</h2>
+<ul>
+<li>We want to find which <code>postcode</code> or <code>city</code> or <code>street</code> has most bars. Running following query from pymongo returns too many missing (<code>None</code>) values-</li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode python"><code class="sourceCode python">  r <span class="op">=</span> db.sandiego.aggregate([
+          { <span class="st">&quot;$match&quot;</span>  : { <span class="st">&quot;$and&quot;</span>: [ { <span class="st">&quot;_type&quot;</span>: { <span class="st">&quot;$eq&quot;</span>: <span class="st">&quot;node&quot;</span> } }, { <span class="st">&quot;amenity&quot;</span>: { <span class="st">&quot;$eq&quot;</span>: <span class="st">&quot;bar&quot;</span> } } ] } }
+         ,{ <span class="st">&quot;$group&quot;</span>: { <span class="st">&quot;_id&quot;</span> : <span class="st">&quot;$address.postcode&quot;</span>, <span class="st">&quot;count&quot;</span>: {<span class="st">&quot;$sum&quot;</span>: <span class="dv">1</span>} } }
+         ,{ <span class="st">&quot;$sort&quot;</span>: { <span class="st">&quot;count&quot;</span>: <span class="op">-</span><span class="dv">1</span> } }
+      ])
+  <span class="cf">for</span> x <span class="op">in</span> r:
+      <span class="bu">print</span> x[<span class="st">&#39;count&#39;</span>],x[<span class="st">&#39;_id&#39;</span>]</code></pre></div>
+<pre class="text"><code>224 None
+10 92104
+9 92101
+6 92103
+2 92120
+2 92115
+2 91932
+2 92102
+2 92116
+1 91941
+1 92118
+1 91942
+1 92105
+1 91911
+1 91977
+1 92107
+1 92018</code></pre>
+<ul>
+<li>Similarly, there are too many missing values for <code>street</code>.</li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode python"><code class="sourceCode python">  r <span class="op">=</span> db.sandiego.aggregate([
+          { <span class="st">&quot;$match&quot;</span>  : { <span class="st">&quot;$and&quot;</span>: [ { <span class="st">&quot;_type&quot;</span>: { <span class="st">&quot;$eq&quot;</span>: <span class="st">&quot;node&quot;</span> } }, { <span class="st">&quot;amenity&quot;</span>: { <span class="st">&quot;$eq&quot;</span>: <span class="st">&quot;bar&quot;</span> } } ] } }
+         ,{ <span class="st">&quot;$group&quot;</span>: { <span class="st">&quot;_id&quot;</span> : <span class="st">&quot;$address.city&quot;</span>, <span class="st">&quot;count&quot;</span>: {<span class="st">&quot;$sum&quot;</span>: <span class="dv">1</span>} } }
+         ,{ <span class="st">&quot;$sort&quot;</span>: { <span class="st">&quot;count&quot;</span>: <span class="op">-</span><span class="dv">1</span> } }
+      ])
+  <span class="cf">for</span> x <span class="op">in</span> r:
+      <span class="bu">print</span> x[<span class="st">&#39;count&#39;</span>],x[<span class="st">&#39;_id&#39;</span>]</code></pre></div>
+<pre class="text"><code>  225 None
+  34 San Diego
+  2 La Mesa
+  2 Imperial Beach
+  1 Carlsbad
+  1 Chula Vista
+  1 Coronado
+  1 Spring Valley</code></pre>
+<ul>
+<li>And, <code>street</code></li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode python"><code class="sourceCode python">    r <span class="op">=</span> query(
+            { <span class="st">&quot;$match&quot;</span>  : { <span class="st">&quot;$and&quot;</span>: [ { <span class="st">&quot;_type&quot;</span>: { <span class="st">&quot;$eq&quot;</span>: <span class="st">&quot;node&quot;</span> } }, { <span class="st">&quot;amenity&quot;</span>: { <span class="st">&quot;$eq&quot;</span>: <span class="st">&quot;bar&quot;</span> } } ] } }
+           ,{ <span class="st">&quot;$group&quot;</span>: { <span class="st">&quot;_id&quot;</span> : <span class="st">&quot;$address.street&quot;</span>, <span class="st">&quot;count&quot;</span>: {<span class="st">&quot;$sum&quot;</span>: <span class="dv">1</span>} } }
+           ,{ <span class="st">&quot;$sort&quot;</span>: { <span class="st">&quot;count&quot;</span>: <span class="op">-</span><span class="dv">1</span> } }
+        )
+    <span class="cf">for</span> x <span class="op">in</span> r:
+        <span class="bu">print</span> x[<span class="st">&#39;count&#39;</span>],x[<span class="st">&#39;_id&#39;</span>]</code></pre></div>
+<pre class="text"><code>220 None
+7 University Avenueenue
+5 5th Avenueenue
+3 Fern Streetreet
+3 El Cajon Boulevard
+2 Mission Gorge Road
+...</code></pre>
+<h3 id="nominatim-reverse-geocoding">Nominatim Reverse Geocoding</h3>
+<p>To find that data for these fields we use <code>pos</code> field of <code>node</code> type document, and query <a href="http://nominatim.openstreetmap.org/reverse" class="uri">http://nominatim.openstreetmap.org/reverse</a> api (<code>nominatim_reverse</code> and <code>reverse_geocoding</code> function in <code>queries.py</code>). We store the returned address in the <code>geo</code> collection in <code>osm</code> db.</p>
+<ul>
+<li>We create a new collections <code>bars</code> in <code>osm</code> db, which has documents with <code>amenity=bar</code> and missing data populated using reverse geocoding. <code>populate_bars</code> function in <code>queries.py</code>.</li>
+</ul>
+<h3 id="most-bars-by-postcode">Most bars by postcode</h3>
+<ul>
+<li>Using <code>topk_bars_by('postcode')</code> in <code>queries.py</code></li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode python"><code class="sourceCode python">    db.bars.aggregate([
+            { <span class="st">&quot;$group&quot;</span>: { <span class="st">&quot;_id&quot;</span> : <span class="st">&quot;$postcode&quot;</span>, <span class="st">&quot;count&quot;</span>: {<span class="st">&quot;$sum&quot;</span>: <span class="dv">1</span>} } }
+           ,{ <span class="st">&quot;$sort&quot;</span>: { <span class="st">&quot;count&quot;</span>: <span class="op">-</span><span class="dv">1</span> } }
+           ,{ <span class="st">&quot;$limit&quot;</span>: k } )
+    ])</code></pre></div>
+<table>
+<thead>
+<tr class="header">
+<th align="left">Count</th>
+<th align="left">Postcode</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">27</td>
+<td align="left">92104</td>
+</tr>
+<tr class="even">
+<td align="left">22</td>
+<td align="left">92103</td>
+</tr>
+<tr class="odd">
+<td align="left">17</td>
+<td align="left">92109</td>
+</tr>
+<tr class="even">
+<td align="left">16</td>
+<td align="left">92101</td>
+</tr>
+<tr class="odd">
+<td align="left">14</td>
+<td align="left">92107</td>
+</tr>
+<tr class="even">
+<td align="left">13</td>
+<td align="left">92110</td>
+</tr>
+<tr class="odd">
+<td align="left">12</td>
+<td align="left">92116</td>
+</tr>
+<tr class="even">
+<td align="left">12</td>
+<td align="left">91941</td>
+</tr>
+<tr class="odd">
+<td align="left">10</td>
+<td align="left">92115</td>
+</tr>
+<tr class="even">
+<td align="left">9</td>
+<td align="left">91910</td>
+</tr>
+</tbody>
+</table>
+<h3 id="most-bars-by-street">Most bars by street</h3>
+<ul>
+<li>Using <code>topk_bars_by('street')</code> in <code>queries.py</code></li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode python"><code class="sourceCode python">    db.bars.aggregate([
+            { <span class="st">&quot;$group&quot;</span>: { <span class="st">&quot;_id&quot;</span> : <span class="st">&quot;$street&quot;</span>, <span class="st">&quot;count&quot;</span>: {<span class="st">&quot;$sum&quot;</span>: <span class="dv">1</span>} } }
+           ,{ <span class="st">&quot;$sort&quot;</span>: { <span class="st">&quot;count&quot;</span>: <span class="op">-</span><span class="dv">1</span> } }
+           ,{ <span class="st">&quot;$limit&quot;</span>: k }
+    ])</code></pre></div>
+<table>
+<thead>
+<tr class="header">
+<th align="left">Count</th>
+<th align="left">Street</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">21</td>
+<td align="left">University Avenue</td>
+</tr>
+<tr class="even">
+<td align="left">15</td>
+<td align="left">El Cajon Boulevard</td>
+</tr>
+<tr class="odd">
+<td align="left">15</td>
+<td align="left">Broadway</td>
+</tr>
+<tr class="even">
+<td align="left">9</td>
+<td align="left">Garnet Avenue</td>
+</tr>
+<tr class="odd">
+<td align="left">9</td>
+<td align="left">30th Street</td>
+</tr>
+<tr class="even">
+<td align="left">8</td>
+<td align="left">Palm Avenue</td>
+</tr>
+<tr class="odd">
+<td align="left">7</td>
+<td align="left">5th Avenue</td>
+</tr>
+<tr class="even">
+<td align="left">6</td>
+<td align="left">Newport Avenue</td>
+</tr>
+<tr class="odd">
+<td align="left">6</td>
+<td align="left">Adams Avenue</td>
+</tr>
+<tr class="even">
+<td align="left">5</td>
+<td align="left">Mission Gorge Road</td>
+</tr>
+</tbody>
+</table>
+<h3 id="most-bars-by-city">Most bars by city</h3>
+<ul>
+<li>Using <code>topk_bars_by('city')</code> in <code>queries.py</code></li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode python"><code class="sourceCode python">    db.bars.aggregate([
+            { <span class="st">&quot;$group&quot;</span>: { <span class="st">&quot;_id&quot;</span> : <span class="st">&quot;$city&quot;</span>, <span class="st">&quot;count&quot;</span>: {<span class="st">&quot;$sum&quot;</span>: <span class="dv">1</span>} } }
+           ,{ <span class="st">&quot;$sort&quot;</span>: { <span class="st">&quot;count&quot;</span>: <span class="op">-</span><span class="dv">1</span> } }
+           ,{ <span class="st">&quot;$limit&quot;</span>: k } )
+    ])</code></pre></div>
+<table>
+<thead>
+<tr class="header">
+<th align="left">Count</th>
+<th align="left">City</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">186</td>
+<td align="left">San Diego</td>
+</tr>
+<tr class="even">
+<td align="left">18</td>
+<td align="left">Chula Vista</td>
+</tr>
+<tr class="odd">
+<td align="left">14</td>
+<td align="left">El Cajon</td>
+</tr>
+<tr class="even">
+<td align="left">10</td>
+<td align="left">None</td>
+</tr>
+<tr class="odd">
+<td align="left">10</td>
+<td align="left">La Mesa</td>
+</tr>
+<tr class="even">
+<td align="left">8</td>
+<td align="left">Lemon Grove</td>
+</tr>
+<tr class="odd">
+<td align="left">6</td>
+<td align="left">National City</td>
+</tr>
+<tr class="even">
+<td align="left">5</td>
+<td align="left">Coronado</td>
+</tr>
+<tr class="odd">
+<td align="left">4</td>
+<td align="left">Santee</td>
+</tr>
+<tr class="even">
+<td align="left">3</td>
+<td align="left">Imperial Beach</td>
+</tr>
+</tbody>
+</table>
+<h2 id="are-benefits-and-problems-with-additional-improvements-discussed">Are benefits and problems with additional improvements discussed?</h2>
+<ul>
+<li>Missing data can be populated by integrating with other datasets and used to analyze.</li>
+</ul>
+<h1 id="references">References</h1>
+<ul>
+<li><a href="https://docs.mongodb.com/manual/">The MongoDB 3.2 Manual</a></li>
+<li><a href="https://www.mongodb.com/presentations/mongodb-analytics-learn-aggregation-example-exploratory-analytics-and-visualization">MongoDB Analytics: Learn Aggregation by Example - Exploratory Analytics and Visualization Using Flight Data</a></li>
+<li><a href="https://docs.mongodb.com/manual/reference/operator/aggregation/">Aggregation Pipeline Operators</a></li>
+<li><a href="http://wiki.openstreetmap.org/wiki/Nominatim#Reverse_Geocoding">Nominatim: Reverse Geocoding</a></li>
+</ul>
+</body>
+</html>

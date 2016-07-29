@@ -1,0 +1,434 @@
+% P3: Wrangle OpenStreetMap Data
+% Data Analyst Nanodegree
+% Satyendra Gurjar
+
+# Problems encountered in your map
+
+## `type` attribute
+According to specficied schema, `type` key suppose to store `node`
+or `way`, however some `<node>` and `<way>` contains `<tag>` that has
+`type` key.
+
+~~~~xml
+  <node id="3281323298" lat="32.8772243" lon="-117.2402912" version="2"
+          timestamp="2016-02-23T21:34:47Z" changeset="37399686" uid="2733383"
+          user="Trising">
+      <tag k="name" v="KSDT"/>
+      <tag k="type" v="radio"/>
+      <tag k="amenity" v="studio"/>
+  </node>
+
+  <way id="44500833" version="2" timestamp="2015-07-05T18:21:48Z"
+          changeset="32432309" uid="292665" user="Dr Kludge">
+      <nd ref="565337131"/>
+      <nd ref="565337128"/>
+      ...
+      <tag k="name" v="City Operations Building"/>
+      <tag k="type" v="governmental"/>
+      <tag k="source" v="Tiger2009"/>
+      <tag k="landuse" v="commercial"/>
+      ...
+  </way>
+~~~~
+
+Since we store all the `<tag>` as key (`k`), value (`v`). `type` here
+collide with the `type` we created for `node` and `way`. So we decided
+to create a `_type` attribute. This was discovered after we imported
+data in mongodb and tried to count number of `node` and `way`. Mongodb
+query returned:
+
+~~~~python
+  db.sandiego.aggregate([{"$group": {"_id": "$type", "count": {"$sum": 1}}}])
+
+  {u'count': 1, u'_id': [u'node', u'radio']}
+  {u'count': 994684, u'_id': u'node'}
+  {u'count': 17, u'_id': [u'way', u'route']}
+  {u'count': 1, u'_id': [u'node', u'video']}
+  {u'count': 75, u'_id': [u'node', u'palm']}
+  {u'count': 3, u'_id': [u'node', u'site']}
+  {u'count': 1, u'_id': [u'node', u'conifer']}
+  {u'count': 1, u'_id': [u'node', u'associateStreet']}
+  {u'count': 77607, u'_id': u'way'}
+  {u'count': 1, u'_id': [u'way', u'dance']}
+  {u'count': 4, u'_id': [u'way', u'governmental']}
+  {u'count': 1, u'_id': [u'way', u'FIXME']}
+  {u'count': 1, u'_id': [u'way', u'public']}
+  {u'count': 4, u'_id': [u'way', u'boundary']}
+  {u'count': 1, u'_id': [u'way', u'civil']}
+  {u'count': 1, u'_id': [u'way', u'gless']}
+~~~~
+
+Here some of the `_id` are array, because in our parsing code we create
+array if key already exists.
+
+## Street Name
+
+* Street names in the data, (`<tag>` with `k=addr:street`) using different
+  notations to refer to same thing. For example, `Avenue` is written as
+  `Av`, `Ave`, `Ave.` and `Avenue`. Similarly, `Boulevard` is written as
+  `Blvd`, `Blvd.` and `Boulevard`.
+
+* Function `update_name` in `audit.py` uses a mapping of street name to
+  street name provided in the data and returns updated street name.
+
+* `update_name` is called from `clean_value` and `audit.clean_value`
+  is called from `shape_element` of `data.py`.
+
+
+## State
+
+* State for San Diego, California, (`<tag>` with `k=addr:state`) is
+  written as different values- `CA`, `Ca`, `California`, and `ca`.
+
+* Function `update_state` in `audit.py` take state name as input and
+  returns std state name, `CA` as output.
+
+* `update_state` is called from `clean_value` and `audit.clean_value`
+  is called from `shape_element` of `data.py`.
+
+
+## Phone
+
+* Phone values in data, (`<tag>` with `k=phone`), are in multiple
+  formats. We want to keep phone numbers 10 digits.
+
+* In `update_phone` function in `audit.py` we used regular expression
+  that (`r'^\+1|[-()]|\s'`) that removes `+1`, `-`, `(`, `)` and all
+  white spaces.
+
+* `update_phone` is called from `clean_value` and `audit.clean_value`
+  is called from `shape_element` of `data.py`.
+
+## Postcode
+
+* Some of the postcodes in data (`<tag>` with `k=addr:postcode`) are in
+  invalid format. For example,
+
+~~~~xml
+  <tag k="addr:postcode" v="CA 91914"/>
+  <tag k="addr:postcode" v="92101-3414, "/>
+  <tag k="addr:postcode" v="Scripps Ranch Blvd."/>
+~~~~
+
+* We use `update_postcode` function in `audit.py` to clean postcodes. We keep numbers (`[0-9]`) and dash (`-`) and ignore rest, which could result in empty postcode for some of the invalid postcodes.
+
+* `update_postcode` is called from `clean_value` and `audit.clean_value` is called from `shape_element` of `data.py`.
+
+# Overview of the data
+
+* Location: [San Diego, California](https://mapzen.com/data/metro-extracts/#san-diego-california)
+* Extract File: [san-diego_california.osm](https://s3.amazonaws.com/metro-extracts.mapzen.com/san-francisco-bay_california.osm.bz2)
+* Uncompressed Size: **282MB**
+
+## Parse and Import
+* XML data (`san-diego_california.osm`) is parsed into json file using
+`data.py`. `clean_value` function in `audit.py` is used for data clean up.
+* Schema of the json document looks like following. Where `_type` can be
+`node` or `way`, as we are using only these two high level xml elements.
+
+~~~~json
+  {
+  "id": "2406124091",
+  "_type: "node",
+  "visible":"true",
+  "created": {
+            "version":"2",
+            "changeset":"17206049",
+            "timestamp":"2013-08-03T16:43:42Z",
+            "user":"linuxUser16",
+            "uid":"1219059"
+          },
+  "pos": [41.9757030, -87.6921867],
+  "address": {
+            "housenumber": "5157",
+            "postcode": "60625",
+            "street": "North Lincoln Ave"
+          },
+  "amenity": "restaurant",
+  "cuisine": "mexican",
+  "name": "La Cabana De Don Luis",
+  "phone": "7732715176"
+  }
+~~~~
+
+* Once we create the json file `san-diego_california.osm.json`, we import
+it in mongo using `mongoimport`
+
+~~~~text
+  $mongoimport /db:osm /collection:sandiego san-diego_california.osm.json
+~~~~
+
+## Statistics
+* Are overview statistics of the dataset computed?
+    + Database queries are used to provide a statistical overview of the
+      dataset, like:
+        - size of the file: 282MB
+        - number of unique users: 871
+        - number of nodes and ways: 994766 nodes, 77637 ways
+        - number of chosen type of nodes, like cafes, shops etc.
+
+~~~~text
+            parking          1866
+            place_of_worship 947
+            school           594
+            fast_food        571
+            restaurant       518
+            bar              268
+            cafe             164
+            fuel             137
+            bank             113
+            toilets          103
+~~~~
+
+* Are the database queries documented?
+    + Source code for statistics is in `statistics.py`.
+    + Following are queries using pymongo.
+
+~~~~python
+dbstats = db.command('dbstats')
+colstats = db.command('collstats','sandiego')
+
+# unique users
+db.sandiego.aggregate([
+    {"$group": {"_id": "$created.uid"}},
+    {"$group": {"_id": None, "count": {"$sum": 1}}}
+  ])
+
+# number of node and way
+db.sandiego.aggregate([
+    {"$group": {"_id": "$_type", "count": {"$sum": 1}}}
+  ])
+
+# top 10 contributors
+db.sandiego.aggregate([
+    {"$group": {"_id": "$created.user", "count": {"$sum": 1}}},
+    {"$sort": {"count": -1}},
+    {"$limit": 10}
+  ])
+
+# top 10 amenity
+db.sandiego.aggregate([
+    {"$match": {"amenity": {"$ne": None}}}, # ignore nulls
+    {"$group": {"_id": "$amenity", "count": {"$sum": 1}}},
+    {"$sort": {"count":-1}},
+    {"$limit": 10}
+  ])
+~~~~
+
+# Other ideas about the datasets
+
+## Query: Which city has most parking ?
+We wanted to use `parking` amenity for analysis, as topk query on
+amenity returns `parking` to be most available data.
+
+~~~~text
+  parking 1866
+  place_of_worship 947
+  school 594
+  fast_food 571
+  restaurant 518
+  bar 268
+  cafe 164
+  fuel 137
+  bank 113
+  toilets 103
+~~~~
+
+However, it truns out most the documents (`way` and `node`) that have
+`parking` amenity attribute doesn't have `city` data.
+`topk_cities_with_parking` in `queries.py`.
+
+* Query
+
+~~~~python
+  db.sandiego.aggregate([
+      { "$match": { "amenity": { "$eq": "parking" } } }
+     ,{ "$project": {"_id": 0, "city": "$address.city", "type": "$_type"} }
+     ,{ "$group": { "_id": {"city": "$city", "type": "$type"}, "count": {"$sum": 1} } }
+     ,{"$sort": {"count": -1}}
+     ,{"$limit": k}
+  ])
+~~~~
+
+* Result
+
+type  city         count
+----  ------------ -----
+way   None         1807
+node  None           31
+way   San Diego       9
+way   La Mesa         5
+way   Lakeside        2
+way   Spring Valley   2
+way   Santee          2
+way   Chula Vista     2
+node  Spring Valley   1
+way   Casa De Oro     1
+
+
+## Using reverse geocoding to populate missing data.
+
++ We want to find which `postcode` or `city` or `street` has most bars. Running following query from pymongo returns too many missing (`None`) values-
+
+~~~~python
+  r = db.sandiego.aggregate([
+          { "$match"  : { "$and": [ { "_type": { "$eq": "node" } }, { "amenity": { "$eq": "bar" } } ] } }
+         ,{ "$group": { "_id" : "$address.postcode", "count": {"$sum": 1} } }
+         ,{ "$sort": { "count": -1 } }
+      ])
+  for x in r:
+      print x['count'],x['_id']
+~~~~
+
+~~~~text
+224 None
+10 92104
+9 92101
+6 92103
+2 92120
+2 92115
+2 91932
+2 92102
+2 92116
+1 91941
+1 92118
+1 91942
+1 92105
+1 91911
+1 91977
+1 92107
+1 92018
+~~~~
+
++ Similarly, there are too many missing values for `street`.
+
+~~~~python
+  r = db.sandiego.aggregate([
+          { "$match"  : { "$and": [ { "_type": { "$eq": "node" } }, { "amenity": { "$eq": "bar" } } ] } }
+         ,{ "$group": { "_id" : "$address.city", "count": {"$sum": 1} } }
+         ,{ "$sort": { "count": -1 } }
+      ])
+  for x in r:
+      print x['count'],x['_id']
+~~~~
+
+~~~~text
+  225 None
+  34 San Diego
+  2 La Mesa
+  2 Imperial Beach
+  1 Carlsbad
+  1 Chula Vista
+  1 Coronado
+  1 Spring Valley
+~~~~
+
++ And, `street`
+
+~~~~python
+    r = query(
+            { "$match"  : { "$and": [ { "_type": { "$eq": "node" } }, { "amenity": { "$eq": "bar" } } ] } }
+           ,{ "$group": { "_id" : "$address.street", "count": {"$sum": 1} } }
+           ,{ "$sort": { "count": -1 } }
+        )
+    for x in r:
+        print x['count'],x['_id']
+~~~~
+
+~~~~text
+220 None
+7 University Avenueenue
+5 5th Avenueenue
+3 Fern Streetreet
+3 El Cajon Boulevard
+2 Mission Gorge Road
+...
+~~~~
+
+### Nominatim Reverse Geocoding
+To find that data for these fields we use `pos` field of `node` type document, and query <http://nominatim.openstreetmap.org/reverse> api (`nominatim_reverse` and `reverse_geocoding` function in `queries.py`). We store the returned address in the `geo` collection in `osm` db.
+
++ We create a new collections `bars` in `osm` db, which has documents with `amenity=bar` and missing data populated using reverse geocoding. `populate_bars` function in `queries.py`.
+
+### Most bars by postcode
+* Using `topk_bars_by('postcode')` in `queries.py`
+
+~~~~python
+    db.bars.aggregate([
+            { "$group": { "_id" : "$postcode", "count": {"$sum": 1} } }
+           ,{ "$sort": { "count": -1 } }
+           ,{ "$limit": k } )
+    ])
+~~~~
+
+Count Postcode
+----- --------
+27    92104
+22    92103
+17    92109
+16    92101
+14    92107
+13    92110
+12    92116
+12    91941
+10    92115
+9     91910
+
+### Most bars by street
+* Using `topk_bars_by('street')` in `queries.py`
+
+~~~~python
+    db.bars.aggregate([
+            { "$group": { "_id" : "$street", "count": {"$sum": 1} } }
+           ,{ "$sort": { "count": -1 } }
+           ,{ "$limit": k }
+    ])
+~~~~
+
+Count Street
+----- -----
+21    University Avenue
+15    El Cajon Boulevard
+15    Broadway
+9     Garnet Avenue
+9     30th Street
+8     Palm Avenue
+7     5th Avenue
+6     Newport Avenue
+6     Adams Avenue
+5     Mission Gorge Road
+
+### Most bars by city
+
+* Using `topk_bars_by('city')` in `queries.py`
+
+~~~~python
+    db.bars.aggregate([
+            { "$group": { "_id" : "$city", "count": {"$sum": 1} } }
+           ,{ "$sort": { "count": -1 } }
+           ,{ "$limit": k } )
+    ])
+~~~~
+
+Count City
+----- ----
+186   San Diego
+18    Chula Vista
+14    El Cajon
+10    None
+10    La Mesa
+8     Lemon Grove
+6     National City
+5     Coronado
+4     Santee
+3     Imperial Beach
+
+## Are benefits and problems with additional improvements discussed?
+  + Missing data can be populated by integrating with other datasets and used to analyze.
+
+# References
+
+* [The MongoDB 3.2 Manual](https://docs.mongodb.com/manual/)
+* [MongoDB Analytics: Learn Aggregation by Example - Exploratory Analytics and Visualization Using Flight Data](https://www.mongodb.com/presentations/mongodb-analytics-learn-aggregation-example-exploratory-analytics-and-visualization)
+* [Aggregation Pipeline Operators](https://docs.mongodb.com/manual/reference/operator/aggregation/)
+* [Nominatim: Reverse Geocoding](http://wiki.openstreetmap.org/wiki/Nominatim#Reverse_Geocoding)

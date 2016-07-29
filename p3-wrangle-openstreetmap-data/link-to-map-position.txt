@@ -1,0 +1,6 @@
+https://mapzen.com/data/metro-extracts/#san-diego-california
+
+OSM XML
+https://s3.amazonaws.com/metro-extracts.mapzen.com/san-diego_california.osm.bz2
+
+san-diego_california.osm  282M

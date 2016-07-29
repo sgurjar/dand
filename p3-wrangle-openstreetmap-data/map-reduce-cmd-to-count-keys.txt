@@ -1,0 +1,48 @@
+mr = db.runCommand({
+  "mapreduce" : "geo",
+  "map" : function() {
+    for (var key in this) {
+      emit(key, null);
+      if (key=='address') {
+        for(var k2 in this['address']){
+          emit('address.'+k2, null)
+        }
+      }
+    }
+  },
+  "reduce" : function(key, stuff) { return null; },
+  "out": "my_collection" + "_keys"
+})
+
+[
+        "_id",
+        "address",
+        "address.address29",
+        "address.bar",
+        "address.building",
+        "address.city",
+        "address.convenience",
+        "address.country",
+        "address.country_code",
+        "address.county",
+        "address.fast_food",
+        "address.footway",
+        "address.hamlet",
+        "address.house_number",
+        "address.neighbourhood",
+        "address.pedestrian",
+        "address.postcode",
+        "address.residential",
+        "address.road",
+        "address.state",
+        "address.suburb",
+        "address.town",
+        "boundingbox",
+        "display_name",
+        "lat",
+        "licence",
+        "lon",
+        "osm_id",
+        "osm_type",
+        "place_id"
+]
