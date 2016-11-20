@@ -1,36 +1,37 @@
 ---
-title: "2016 Presidential Campaign Finance"
-author: "Satyendra Gurjar"
-date: "September, 2016"
 output: html_document
 ---
+2016 Presidential Campaign Finance by Satyendra Gurjar
+======================================================
+
+* This reports explores 2016 Presidential Campaign Finance dataset.
+* We have used dataset of Connecticut state, downloaded from <ftp://ftp.fec.gov/FEC/Presidential_Map/2016/P00000001/P00000001-CT.zip>
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, fig.width = 10, fig.height = 10)
-setwd("C:/books3/coursera/data-analyst-nanodegree/projects/p4-explore-and-summarize-data")
+setwd(
+ "C:/books3/coursera/data-analyst-nanodegree/gitrepo/dand/p4-explore-and-summarize-data"
+)
 remove(list=ls())
 ```
 
-# Dataset
-* [2016 Presidential Campaign Finance](http://www.fec.gov/disclosurep/PDownload.do)
-* [CT State](ftp://ftp.fec.gov/FEC/Presidential_Map/2016/P00000001/P00000001-CT.zip)
-
-# Read Data
-
-```{r warning=FALSE, message=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
 library(knitr)
 library(ggplot2)
-library(zipcode)
+#library(plyr)
 library(dplyr)
 library(reshape2)
 library(scales)
 library(gridExtra)
 library(RColorBrewer)
+#library(GGally)
+library(corrplot)
+
+s <- function(a, k=7){ sample_n(as.data.frame(a), k)}
+cor_ <- function(x) { cor(x, use = 'pairwise.complete.obs') }
 ```
 
-```{r}
-sample <- function(x, n = 11) {sample_n(as.data.frame(x),n)}
-
+```{r echo=FALSE, message=FALSE, warning=FALSE, Load_the_Data}
 pcf_datafile <- 'P00000001-CT.csv'
 
 # colors for plots
@@ -58,12 +59,9 @@ fix_zipcode <- function(z) {
 }
 
 # add colname for last comma
-colnames <- c(as.character( read.csv( pcf_datafile,
-                                      row.names = NULL,
-                                      nrows = 1,
-                                      header = F,
-                                      as.is = T)),
-                            'last')
+colnames <- c(as.character(read.csv(pcf_datafile, row.names = NULL, nrows = 1,
+                  header = F, as.is = T ) ), 'last')
+
 
 # there is comma in the end, mess up the colnames (row.name),
 # contbr_zip is not int
@@ -99,48 +97,365 @@ pcf <- pcf[, c( 'cand_nm_last',
                 'contb_receipt_amt',
                 'contb_receipt_dt')]
 
+acs_mhi <- read.csv(
+  'ACS_14_5YR_B19013_with_ann.csv',
+  skip = 1,
+  as.is = T,
+  colClasses = c("zip" = "character", "median_household_income" = "numeric"),
+  col.names = c('skip1', 'zip', 'skip2', 'median_household_income', 'skip3'),
+  na.strings = c("-"))
+
+acs_mhi <- select(acs_mhi,-grep('skip', names(acs_mhi)))
+
+pcf <- merge(pcf, acs_mhi, by.x = 'contbr_zip', by.y = 'zip')
+
+# add median_contb_receipt_amt
+pcf <- as.data.frame(group_by(pcf, contbr_zip) %>%
+  mutate(median_contb_amt = median(contb_receipt_amt)))
+
+pcf <- as.data.frame(group_by(pcf, contbr_zip) %>%
+  mutate(median_contb_amt = median(contb_receipt_amt)))
+
+# add median_contb_receipt_amt by party
+pcf <- as.data.frame(group_by(pcf, contbr_zip, cand_party)  %>%
+  mutate(median_contb_amt_by_cand_party = median(contb_receipt_amt)))
+
+# add median_contb_receipt_amt by candidate
+pcf <- as.data.frame(group_by(pcf, contbr_zip, cand_nm_last)  %>%
+  mutate(median_contb_amt_by_cand_nm_last = median(contb_receipt_amt)))
+
+dim(pcf)
 str(pcf)
-sample(pcf, 4)
+summary(pcf)
 ```
 
-# Analysis and Exploration
+* Dataset contains 9 variables with about 58000 observations.
 
-## Contribution Amount By Party
+# Univariate Plots Section
 
-```{r}
+```{r echo=FALSE, message=FALSE, warning=FALSE, Univariate_Plots}
+qplot(data=pcf, contb_receipt_amt) +
+  labs(title = 'Frequency Count of Contributions Amount')
 
-# compute quantile, mean and number of contributions
-df <- pcf %>%
-  group_by(cand_party) %>%
+qplot(data=pcf, contb_receipt_amt, binwidth = 10) +
+  coord_cartesian(xlim = c(0,1000)) +
+  scale_x_continuous(breaks = c(seq(0,60,20),seq(100,500,50),seq(500,1000,100))) +
+  labs(title = 'Frequency Count of Contributions Amount ( <1000 )')
+
+qplot(data=pcf, contb_receipt_amt) +
+  scale_x_log10(breaks = c(1,5,10,27,50,100,200,500,1000,2700,5400,10800)) +
+  labs(title = 'Frequency Count of Contributions Amount (log10)')
+
+```
+
+* After transforming contribution amount, it appears to be in normal distribution.
+
+### Median Household Income
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Contribution_by_Zipcodes}
+tmp <- filter(pcf,!is.na(median_household_income)) %>%
+  group_by(contbr_zip) %>%
+  summarise(median_household_income = first(median_household_income))
+
+qplot(median_household_income, data = tmp, bins = 40)
+
+summary(tmp$median_household_income)
+```
+
+* Median Household income is normally distributed with mean `82710` and median `78880`.
+* We should try to see if there is any relationship between median contribution
+  amount for a zipcode and its median household income.
+
+### Median Contribution Amount
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Median_Contribution_Amount}
+
+tmp <- group_by(pcf, contbr_zip) %>%
+  summarise(median_contb_amt = first(median_contb_amt))
+
+ggplot(data = tmp, aes(x = median_contb_amt)) +
+  geom_histogram(binwidth=10) +
+  ggtitle('Median Contribution Amount (<500)') +
+  scale_x_continuous(breaks=seq(min(tmp$median_contb_amt), max(tmp$median_contb_amt), 20)) +
+  coord_cartesian(xlim=c(0,500))
+```
+
+* Median Contribution Amount around `25` has most frequency and then around `50`.
+
+# Univariate Analysis
+
+### What is the structure of your dataset?
+
+* There are `58172` contributions in the dataset with `5` features.
+* Each observation shows amount contributed by an individual.
+* Features are- `contbr_zip`,`cand_nm_last`, `cand_party`, `contb_receipt_dt`, and
+ `median_household_income`.
+* The variables `cand_nm_last`, `cand_party` are factor variables with following levels.
+    + **`cand_nm_last`** Last name of the candidate- Bush, Carson, Christie, Clinton, Cruz, Fiorina, Graham, Huckabee, Jindal, Johnson, Kasich, Lessig, O'Malley, Pataki, Paul, Perry, Rubio, Sanders, Santorum, Stein, Trump, Walker, Webb
+    + **`cand_party`** Political party of the candidate- D, G, L, R
+* **`contb_receipt_amt`** is num variable and shows amount of contribution made by
+  an individual.
+* **`median_household_income`** is num variable, shows median household income of
+  zip code.
+* **`contbr_zip`** is zipcode where the individual contribution was made.
+* **`contb_receipt_dt`** is date on which individual contribution was made.
+
+### What is/are the main feature(s) of interest in your dataset?
+* The main features is `median_household_income`.
+* We will try to find relationship between contribution amount (`contb_receipt_amt`) and `median_household_income`.
+
+### What other features in the dataset do you think will help support your investigation into your feature(s) of interest?
+* `cand_nm_last` and `cand_party` likely to contribute to the `contb_receipt_amt`.
+
+### Did you create any new variables from existing variables in the dataset?
+* I created a variable `median_contb_amt`, which median contribution amount for a
+  zipcode. As I expect it to be related to `median_household_income`.
+* I also created `median_contb_amt` per zipcode by `cand_nm_last` and `cand_party`,
+  `median_contb_amt_by_cand_nm_last` and `median_contb_amt_by_cand_party` respectively.
+
+### Of the features you investigated, were there any unusual distributions? Did you perform any operations on the data to tidy, adjust, or change the form of the data? If so, why did you do this?
+
+* I log-transformed the right skewed `contb_receipt_amt`. The transformed distribution for
+ `contb_receipt_amt` appears to be normal.
+
+# Bivariate Plots Section
+
+## Contribution by candidates
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Contribution_Amount_by_Candidates}
+tmp <- group_by(pcf, cand_nm_last, cand_party) %>%
+  summarise(contb_receipt_amt = sum(contb_receipt_amt),
+                      n_contb = n()) %>%
+  ungroup()
+
+tmp$prop_contb_receipt_amt = with(tmp,
+                          round(contb_receipt_amt / sum(contb_receipt_amt), 2))
+tmp$prop_n_contb = with(tmp, round(n_contb / sum(n_contb), 2))
+
+p <- function(n) { paste0(n * 100, sep = '%') } # make % string
+
+ggplot(tmp, aes(x = cand_nm_last, y = contb_receipt_amt, fill = cand_party)) +
+  geom_bar(stat = 'identity', show.legend = F) +
+  geom_text(aes( label = p(tmp$prop_contb_receipt_amt), hjust = -0.25)) +
+  scale_fill_manual(values = party_colors) +
+  scale_y_continuous(labels = dollar) +
+  coord_flip() +
+  ggtitle('Contribution Amount by Candidates')
+
+ggplot(tmp, aes(x = cand_nm_last, y = n_contb, fill = cand_party)) +
+  geom_bar(stat = 'identity', show.legend = F) +
+  geom_text(aes(label = p(tmp$prop_n_contb), hjust = -0.25)) +
+  scale_fill_manual(values = party_colors) +
+  coord_flip() +
+  ggtitle('Number of Contributions by Candidates')
+
+```
+
+* Clinton received `45%` of contribution amount with `30%` of contributions.
+* Sanders received `16%` of contribution amount with `54%` of contributions.
+
+## Contribution by Party
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Contribution_Amount_by_Party}
+tmp <- group_by(pcf, cand_party) %>%
+  summarise(contb_receipt_amt = sum(contb_receipt_amt),
+                      n_contb = n()) %>%
+  ungroup()
+
+tmp$prop_contb_receipt_amt = round(tmp$contb_receipt_amt / sum(tmp$contb_receipt_amt), 2)
+tmp$prop_n_contb = round(tmp$n_contb / sum(tmp$n_contb), 2)
+
+p <- function(n) { paste0(n * 100, sep = '%') } # make % string
+
+ggplot(tmp, aes(x = cand_party, y = contb_receipt_amt, fill = cand_party)) +
+  geom_bar(stat = 'identity') +
+  geom_text(aes( label = p(tmp$prop_contb_receipt_amt), vjust = -0.25)) +
+  scale_fill_manual(values = party_colors, name = NULL, labels=party_names) +
+  scale_y_continuous(labels = dollar) +
+  ggtitle('Contribution Amount by Party')
+
+ggplot(tmp, aes(x = cand_party, y = n_contb, fill = cand_party)) +
+  geom_bar(stat = 'identity') +
+  geom_text(aes(label = p(tmp$prop_n_contb), vjust = -0.25)) +
+  scale_fill_manual(values = party_colors, name = NULL, labels=party_names) +
+  ggtitle('Number of Contributions by Party')
+
+```
+
+* Republicans got `39%` of contribution amount by just `16%` of contributions.
+* Republicans contribution is distributed among many candidates.
+* Democrats got `61%` of contribution amount by `84%` of contributions.
+
+## Correlation between Median Contribution Amount and Median Household Income
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Bivariate_Plots_2}
+# median_contb_receipt_amt by zip
+tmp <- group_by(pcf, contbr_zip) %>%
   summarise(
-    '0%'=quantile(contb_receipt_amt, .0),
-    '25%'=quantile(contb_receipt_amt, .25),
-    '50%'=quantile(contb_receipt_amt, .50),
-    '75%'=quantile(contb_receipt_amt, .75),
-    '100%'=quantile(contb_receipt_amt, 1),
-    'mean'=mean(contb_receipt_amt),
-    'contb_amt'=sum(contb_receipt_amt),
-    'contbs' = n()
-  ) %>%
-  ungroup() %>%
-  arrange(desc(contb_amt))
+    median_household_income  = first(median_household_income),
+    median_contb_receipt_amt = median(contb_receipt_amt),
+    n_contb                  = n()
+  )
 
-# add proportion of contribution amount
-df$prop_of_contb_amt <- with(df, round(contb_amt / sum(contb_amt), digits = 3))
+tmp2 <- melt(cor_(
+          select(
+            tmp,
+            n_contb,
+            median_household_income,
+            median_contb_receipt_amt
+          )))
 
-# add proportion of total number if contributions
-df$prop_of_contbs <- with(df, round(contbs / sum(contbs), digits = 3))
-
-# show table
-kable(as.data.frame(df), caption = 'Contribution by Party')
+ggplot(data=tmp2, aes(x=Var1, y=Var2, fill=value)) +
+  geom_tile(colour = "white") +
+  scale_fill_gradient2(
+    low="blue", high="red", mid="white", midpoint=0, limit = c(-1,1), name="") +
+  geom_text(aes(Var2, Var1, label = round(value,digits=2))) +
+  theme_minimal() +
+  labs(x="",y="",title="Correlation Heatmap by Zipcode")
 ```
 
-* Republican got `39%` of contributions amount with only `16%` of contributors.
-* Also Republican's contributions was divided between too many candidates,
-  as we will see in the next table.
-* Democrats got `61%` of contributions amount with `84%`  of contributors.
+* Median Household income and number of contributions (`n_contb`) are somewhat related.
+* Median contribution amount is not related to number of contribution or median household income.
 
-```{r}
+## Correlation between Median Contribution Amount and Median Household Income by Party
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Bivariate_Plots_3}
+# median_contb_receipt_amt by zip and party
+tmp <- group_by(pcf, contbr_zip, cand_party) %>%
+       summarise(
+        median_household_income  = first(median_household_income),
+        median_contb_receipt_amt = median(contb_receipt_amt),
+        n_contb                  = n()) %>%
+       ungroup()
+
+tmp2 <- melt(cor_(
+  filter(tmp, cand_party == 'D') %>%
+  select(
+    n_contb,
+    median_household_income,
+    median_contb_receipt_amt)
+  ))
+
+p1 <- ggplot(data=tmp2, aes(x=Var1, y=Var2, fill=value)) +
+  geom_tile(colour = "white") +
+  scale_fill_gradient2(
+    low="blue", high="red", mid="white", midpoint=0, limit = c(-1,1), name="") +
+  geom_text(aes(Var2, Var1, label = round(value,digits=2))) +
+  theme_minimal() +
+  labs(x="",y="",title="Democrats")
+
+tmp2 <- melt(cor_(
+  filter(tmp, cand_party == 'R') %>%
+  select(
+    n_contb,
+    median_household_income,
+    median_contb_receipt_amt)
+  ))
+
+p2 <- ggplot(data=tmp2, aes(x=Var1, y=Var2, fill=value)) +
+  geom_tile(colour = "white") +
+  scale_fill_gradient2(low="blue", high="red", mid="white", midpoint=0, limit = c(-1,1), name="") +
+  geom_text(aes(Var2, Var1, label = round(value,digits=2))) +
+  theme_minimal() +
+  labs(x="",y="",title="Republicans")
+
+grid.arrange(p1, p2, top="Correlation Heatmap by Zipcode")
+```
+
+* Median Household income is related number of contributions and more in case of Republican contributions.
+* Again, median contribution amount has no relation with number of contributions or median household income. However, its negative in case of Democrats and positive in case of Republican. Which could mean that, places with higher median household income contributed to Republicans more than Democrats and places with lower median household income contributed to Democrats more.
+
+## Correlation between Median Contribution Amount and Median Household Income by Candidates
+
+* Since there are too many candidates, first we find main candidates.
+* Main Candidates: Top 5 Candidates by proportion of contribution amount, and
+  top 5 candidates by number of contributions.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Bivariate_Plots_4}
+tmp2 <- group_by(pcf, cand_nm_last) %>%
+  summarise(
+    contb_receipt_amt = sum(contb_receipt_amt),
+    n_contb                  = n()
+  )
+
+tmp2$prop_contb_amt <- with(tmp2, round(contb_receipt_amt/sum(contb_receipt_amt),digits = 3))
+tmp2$prop_n_contb <- with(tmp2, round(n_contb / sum(n_contb), digits = 3))
+
+# Top 5 by proportion of total contribution amount
+kable(select(tmp2, cand_nm_last, prop_contb_amt) %>%
+  arrange(desc(prop_contb_amt)) %>%
+  top_n(5), caption='Top 5 by proportion of total contribution amount')
+
+# Top 5 by proportion of number contributions
+kable(select(tmp2, cand_nm_last, prop_n_contb) %>%
+  arrange(desc(prop_n_contb)) %>%
+  top_n(5), caption = 'Top 5 by proportion of number contributions')
+
+# median_contb_receipt_amt by zip and candidates
+tmp <- group_by(pcf, contbr_zip, cand_nm_last) %>%
+  summarise(
+    median_household_income  = first(median_household_income),
+    median_contb_receipt_amt = median(contb_receipt_amt),
+    n_contb                  = n()
+  ) %>% ungroup() %>% ungroup()
+
+hm <- function(df) {
+          ggplot(data=df, aes(x=Var1, y=Var2, fill=value)) +
+          geom_tile(colour = "white") +
+          scale_fill_gradient2(
+            low="blue", high="red", mid="white", midpoint=0, limit = c(-1,1), name="") +
+          geom_text(aes(Var2, Var1, label = round(value,digits=2))) +
+          theme_minimal()
+      }
+
+p1 <- hm(melt(cor_(select(
+            filter(tmp, cand_nm_last == 'Bush'),
+            n_contb,median_household_income,median_contb_receipt_amt)))) +
+  labs(x="",y="",title='Bush')
+
+p2 <- hm(melt(cor_(select(
+            filter(tmp, cand_nm_last == 'Carson'),
+            n_contb,median_household_income,median_contb_receipt_amt)))) +
+  labs(x="",y="",title='Carson')
+
+p3 <- hm(melt(cor_(select(
+            filter(tmp, cand_nm_last == 'Clinton'),
+            n_contb,median_household_income,median_contb_receipt_amt)))) +
+  labs(x="",y="",title='Clinton')
+
+p4 <- hm(melt(cor_(select(
+            filter(tmp, cand_nm_last == 'Cruz'),
+            n_contb,median_household_income,median_contb_receipt_amt)))) +
+  labs(x="",y="",title='Cruz')
+
+p5 <- hm(melt(cor_(select(
+            filter(tmp, cand_nm_last == 'Kasich'),
+            n_contb,median_household_income,median_contb_receipt_amt)))) +
+  labs(x="",y="",title='Kasich')
+
+p6 <- hm(melt(cor_(select(
+            filter(tmp, cand_nm_last == 'Rubio'),
+            n_contb,median_household_income,median_contb_receipt_amt)))) +
+  labs(x="",y="",title='Rubio')
+
+p7 <- hm(melt(cor_(select(
+            filter(tmp, cand_nm_last == 'Sanders'),
+            n_contb,median_household_income,median_contb_receipt_amt)))) +
+  labs(x="",y="",title='Sanders')
+
+grid.arrange(p3, p7, top="Correlation Heatmap by Democrate Candidates")
+grid.arrange(p1, p2, p4, p5, p6, ncol = 1,
+             top="Correlation Heatmap by Republican Candidates" )
+```
+
+* Sanders have negative correlation between median contribution amount and number
+ of contributions, that is places where median household income is higher he got less
+ contribution amounts.
+* Clinton has higher positive correlation between median household income and number
+ of contributions, she got more number of contributions from the higher median household
+ income places.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Bivariate_Plots_7}
 # boxplot of contribution amount by party
 ggplot(pcf, aes(x=cand_party,y=contb_receipt_amt)) +
   geom_boxplot(aes(color = cand_party)) +
@@ -153,16 +468,347 @@ ggplot(pcf, aes(x=cand_party,y=contb_receipt_amt)) +
   theme(legend.position = 'top')
 ```
 
-* Median of contribution amount is higher for Republican's than Democrates.
-* First and third quantile is higher than Democrates.
+* Democrats median contribution amount is much lower than rest.
 
-### Contribution Amount by Date
+```{r echo=FALSE, message=FALSE, warning=FALSE, Bivariate_Plots_8}
+candidates <- c('Bush','Carson','Clinton','Cruz','Kasich','Rubio','Sanders')
 
-```{r}
-# consider Democrates and Republicans only
-tmp <- subset(pcf, cand_party %in% c('D','R'))
+# boxplot of contribution amount by party
+tmp <- filter(pcf, cand_nm_last %in% candidates)
+ggplot(tmp, aes(x=cand_nm_last,y=contb_receipt_amt)) +
+  geom_boxplot(aes(color = cand_nm_last)) +
+  coord_cartesian(ylim = quantile(tmp$contb_receipt_amt, probs = c(0,.99))) +
+  scale_y_continuous(breaks = seq(0,3000,100)) +
+  labs(title = 'Boxplot 99% of Contribution Amount by Candidates',
+           x = 'Candidates',
+           y = 'Contribution Amount') +
+  theme(legend.position = 'top')
+```
 
-# scatter plot, contribution amount by date by party
+* Clinton's median contribution amount is higher than Sander's.
+ However Sander got more contributions.
+
+# Bivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the investigation. How did the feature(s) of interest vary with other features in the dataset?
+
+* There is positive correlation (`0.26`) between median household income and
+  number of contributions, which more apparent in Republican contribution (`0.44`).
+  This implies number of contributions increases as median household income increases.
+
+* In candidate wise correlation heatmap, Sanders has very low correlation between median
+ household income and number of contributions (`0.08`). However, he has higher negative
+ correlation (`-0.26`) correlation between median contribution amount and number of
+ contributions, implies he got big number of small amount of contributions from low median
+ household income places.
+
+* Clinton and most of Republican have higher correlation between median
+  household income and number of contributions.
+
+* Party wise Scatter plot seems to suggest that Democrats for more contribution from
+  lower median household income places. Also, number contributions for Democrats is
+  higher for low median household income places.
+
+* Sanders have high number of contributions from low median household income areas.
+
+### Did you observe any interesting relationships between the other features (not the main feature(s) of interest)?
+
+* Sanders received more number of contributions (`~54%`), while Clinton received more amount of contribution (`~49%`).
+  Sanders received only `15%` of contribution. Which implies he got many small amount of contribution, which is also
+  apparent from the candidate wise boxplot.
+
+### What was the strongest relationship you found?
+
+* Correlation between median household income and number of contribution for Republicans
+  is higher than Democrats, that is areas where median household income is higher
+  Republicans got more number of contributions.
+
+# Multivariate Plots Section
+
+## Scatter Plots
+
+* Here, we are doing it Party wise and consider only 2 parties- Democrats
+  and Republicans.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Bivariate_Plots_5}
+
+ggplot(pcf, aes(median_household_income, contb_receipt_amt)) +
+  geom_point(alpha = 1/5, position = 'jitter') +
+  geom_smooth(se = FALSE) +
+  scale_y_log10() +
+  labs(title = 'Contribution Amount by Median Household Income',
+       x = 'Median Household Income',
+       y = 'Median Contribution Amount (log10)') +
+  theme(legend.position = 'top') +
+  facet_wrap(~cand_party)
+
+tmp <- filter(pcf, cand_party %in% c('R', 'D')) %>%
+          group_by(contbr_zip, cand_party) %>%
+          summarise(
+            median_household_income = first(median_household_income),
+            n_contb                 = n(),
+            median_contb_amt        = median(contb_receipt_amt)
+          ) %>% ungroup()
+
+# scatter plot between median_household_income and median_contb_amt
+p1 <- ggplot(tmp, aes(median_household_income, median_contb_amt)) +
+  geom_point(aes(color = cand_party)) +
+  scale_y_log10() +
+  facet_grid(~cand_party) +
+  scale_color_manual(values=main_party_colors,name=NULL,labels=main_party_names) +
+  labs(title = 'Contribution Amount by Median Household Income',
+       x = 'Median Household Income',
+       y = 'Median Contribution Amount (log10)') +
+  theme(legend.position = 'top')
+
+# scatter plot between median_household_income and number of contributions
+p2 <- ggplot(tmp, aes(median_household_income, n_contb)) +
+  geom_point(aes(color = cand_party),show.legend = F) +
+  scale_y_log10() +
+  facet_grid(~cand_party) +
+  scale_color_manual(values=main_party_colors,name=NULL,labels=main_party_names) +
+  labs(title = 'Number of Contributions by Median Household Income',
+       x = 'Median Household Income',
+       y = 'Number of Contributions (log10)')
+
+# show in grid
+grid.arrange(p1,p2)
+```
+
+* There are many Democrats contributions from low median household income places,
+ most of them are contributed to Sanders.
+* Republicans get more or similar number of contributions as median household income increases.
+* Democrats get more numer of contributions at lower median household income.
+* Median contribution amount is lower for Democrats at every median household income level.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Bivariate_Plots_6}
+candidates <- c('Bush','Carson','Clinton','Cruz','Kasich','Rubio','Sanders')
+
+tmp <- filter(pcf, cand_nm_last %in% candidates) %>%
+          group_by(contbr_zip, cand_nm_last) %>%
+          summarise(
+            median_household_income = first(median_household_income),
+            cand_party              = first(cand_party),
+            n_contb                 = n(),
+            median_contb_amt        = median(contb_receipt_amt)
+          ) %>% ungroup()
+
+# scatter plot between median_household_income and median_contb_amt
+p1 <- ggplot(filter(tmp, cand_party=='D'),
+             aes(median_household_income, median_contb_amt)) +
+  geom_point(color = 'skyblue') +  # aes(color = cand_party)
+  scale_y_log10() +
+  facet_wrap(~cand_nm_last) +
+  #scale_color_manual(values=main_party_colors,name=NULL,labels=main_party_names) +
+  labs(title = 'Contribution Amount by Median Household Income (Democrats)',
+       x = 'Median Household Income',
+       y = 'Median Contribution Amount (log10)') +
+  theme(legend.position = 'top')
+
+p2 <- ggplot(filter(tmp, cand_party=='R'),
+             aes(median_household_income, median_contb_amt)) +
+  geom_point(color = 'indianred1') +  # aes(color = cand_party)
+  scale_y_log10() +
+  facet_wrap(~cand_nm_last) +
+  #scale_color_manual(values=main_party_colors,name=NULL,labels=main_party_names) +
+  labs(title = 'Contribution Amount by Median Household Income (Republicans)',
+       x = 'Median Household Income',
+       y = 'Median Contribution Amount (log10)') +
+  theme(legend.position = 'top')
+
+# scatter plot between median_household_income and number of contributions
+p3 <- ggplot(filter(tmp, cand_party=='D'),
+             aes(median_household_income, n_contb)) +
+  geom_point(color = 'skyblue',show.legend = F) +
+  scale_y_log10() +
+  facet_wrap(~cand_nm_last) +
+  scale_color_manual(values=main_party_colors,name=NULL,labels=main_party_names) +
+  labs(title = 'Number of Contributions by Median Household Income (Democrats)',
+       x = 'Median Household Income',
+       y = 'Number of Contributions (log10)')
+
+p4 <- ggplot(filter(tmp, cand_party=='R'),
+             aes(median_household_income, n_contb)) +
+  geom_point(color = 'indianred1',show.legend = F) +
+  scale_y_log10() +
+  facet_wrap(~cand_nm_last) +
+  scale_color_manual(values=main_party_colors,name=NULL,labels=main_party_names) +
+  labs(title = 'Number of Contributions by Median Household Income (Republicans)',
+       x = 'Median Household Income',
+       y = 'Number of Contributions (log10)')
+
+# show in grid
+grid.arrange(p1,p2,p3,p4)
+```
+
+* Here, Sanders seems to have high number of contributions from low median
+  household income zipcodes. However his median contribution amount is way
+  lower than all other candidates. That is, he got many small contributions
+  from low median household income zipcodes.
+
+## Contribution over time
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Contributions_over_time}
+tmp <- pcf %>% mutate(contb_receipt_dt = format(contb_receipt_dt,'%y-%m')) %>%
+        group_by(contb_receipt_dt, cand_party) %>%
+        summarise(contb_receipt_amt = sum(contb_receipt_amt),
+                  n_contb = n()) %>%
+        ungroup()
+
+#ggplot(data = tmp, aes(x = contb_receipt_dt, y = contb_receipt_amt, fill = cand_party)) +
+#       geom_bar(stat = 'sum') +
+#       scale_fill_manual(values=party_colors, name=NULL, labels=party_names) +
+#       scale_y_continuous(labels = dollar) +
+#       ggtitle('Amount of Contribtions over time')
+
+ggplot( data = tmp, aes( x = contb_receipt_dt, y = contb_receipt_amt,
+                         color = cand_party, group = cand_party )) +
+  stat_summary( fun.y = 'sum', geom = 'line' ) +
+  scale_color_manual(values=party_colors, name=NULL, labels=party_names) +
+  ggtitle('Amount of Contribtions over time')
+
+#ggplot(data = tmp, aes(x = contb_receipt_dt, y = n_contb, fill = cand_party)) +
+#       geom_bar(stat = 'sum') +
+#       scale_fill_manual(values=party_colors, name=NULL, labels=party_names) +
+#       ggtitle('Number of Contribtions over time')
+
+qplot( contb_receipt_dt, data = pcf, geom = 'freqpoly', color = cand_party) +
+  scale_color_manual(values=party_colors, name=NULL, labels=party_names) +
+  ggtitle('Number of Contribtions over time') +
+  theme(legend.position = 'top')
+```
+
+* Amount of contributions is higher for Republicans in the beginning, however it significantly comes down later.
+* Democrats' contributions is higher in the beginning and slowly rise until comes down in the end.
+* Number of contributions kept on rising for Democrats' until last two months.
+
+## Median Contribution Amount by Party and Candidates
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Median_Contribution_Amount_By_Party}
+tmp <- group_by(pcf, contbr_zip, cand_party) %>%
+  summarise(median_contb_amt_by_cand_party =
+              first(median_contb_amt_by_cand_party))
+
+#cat("quantile(median_contb_amt_by_cand_party)")
+#q = quantile(tmp$median_contb_amt_by_cand_party, probs = c(0,.9))
+#q
+
+#ggplot(data = tmp, aes(x=median_contb_amt_by_cand_party)) +
+#  geom_histogram(binwidth = 1, aes(fill = cand_party)) +
+#  scale_fill_manual(values = party_colors, name = NULL, labels = party_names) +
+#  coord_cartesian(xlim = q) +
+#  ggtitle('Median Contribution Amount (90%) by Party ') +
+#  facet_wrap(~cand_party)
+
+ggplot(data = tmp, aes(x=median_contb_amt_by_cand_party)) +
+  geom_freqpoly(aes(color = cand_party)) +
+  scale_color_manual(values=party_colors,name=NULL,labels=party_names) +
+  scale_x_continuous(breaks=c(seq(5,200,50),seq(200,2700,500))) +
+  ggtitle('Median Contribution Amount by Party')
+```
+
+* For higher contribution amount, Democrat’s median contribution amount is
+ lower than Republican's
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, Median_Contribution_Amount_By_Candidates}
+tmp <- pcf %>%
+  filter(cand_nm_last %in% c('Bush','Carson','Clinton','Cruz','Fiorina','Kasich','Paul','Rubio','Sanders','Trump','Walker')) %>%
+  group_by(contbr_zip, cand_nm_last) %>%
+  summarise(
+    median_contb_amt_by_cand_nm_last = first(median_contb_amt_by_cand_nm_last),
+    cand_party = first(cand_party)) %>%
+  ungroup()
+
+#cat("quantile(median_contb_amt_by_cand_nm_last)")
+#q = quantile(tmp$median_contb_amt_by_cand_nm_last, probs = c(0,.9))
+#q
+
+ggplot(data = tmp, aes(x=median_contb_amt_by_cand_nm_last)) +
+  geom_histogram(binwidth = 5, aes(fill = cand_party)) +
+  scale_fill_manual(values = main_party_colors, name = NULL, labels = main_party_names) +
+  #coord_cartesian(xlim = q) +
+  ggtitle('Median Contribution Amount by Candidates') +
+  facet_wrap(~cand_nm_last)
+```
+
+```{r echo=FALSE, Multivariate_Plots_1}
+pcf$median_household_income.interval <- cut(pcf$median_household_income,
+                                            breaks = seq(10000,220000,40000),
+                                            dig.lab = 6)
+
+ggplot(filter(pcf, !is.na(median_household_income.interval)),
+       aes(median_household_income.interval, contb_receipt_amt,
+           color = cand_party)) +
+  geom_boxplot() +
+  scale_color_manual(values = party_colors, name=NULL, labels = party_names) +
+  scale_y_log10() +
+  ggtitle("Contribution Amount (log10) by Party") +
+  theme(legend.position = 'top')
+```
+
+* Areas with lower household income has more Democratic contribution.
+* Republicans have higher contribution amount in general, even in the
+  areas of lower household income.
+
+```{r echo=FALSE, Multivariate_Plots_2}
+main_candidates <- c("Bush", "Carson", "Clinton", "Cruz",
+                     "Kasich", "Rubio", "Rubio", "Sanders")
+
+ggplot(filter(pcf, !is.na(median_household_income.interval)
+                   &(cand_nm_last %in% main_candidates)),
+       aes(median_household_income.interval, contb_receipt_amt,
+           color = cand_nm_last)) +
+  geom_boxplot() +
+  scale_y_log10() +
+  ggtitle("Contribution Amount (log10) by Candidates") +
+  theme(legend.position = 'top') +
+  facet_wrap(~cand_party)
+```
+
+* Most of the Bush's contribution came from higher income areas.
+* Sanders got many small amount of contributions from lower and middle income areas.
+* Clinton got contributions from every income area, she got relatively large amount of contributions.
+
+```{r echo=FALSE, Multivariate_Plots_5}
+tmp <- pcf %>%
+       filter(!is.na(median_household_income.interval)) %>%
+       group_by(contbr_zip, cand_party) %>%
+       summarise(n_contb = n(),
+        median_household_income.interval = first(median_household_income.interval)) %>%
+       ungroup()
+
+ggplot(tmp, aes(median_household_income.interval, n_contb, color = cand_party)) +
+  geom_boxplot() +
+  scale_color_manual(values = party_colors) +
+  scale_y_log10() +
+  ggtitle("Number of Contributions by Party")
+```
+
+* Number of contributions for Democrats are higher in low and middle household income areas.
+
+```{r echo=FALSE, Multivariate_Plots_6}
+tmp <- pcf %>%
+       filter(!is.na(median_household_income.interval)) %>%
+       filter(cand_nm_last %in% main_candidates) %>%
+       group_by(contbr_zip, cand_party, cand_nm_last) %>%
+       summarise(n_contb = n(),
+        median_household_income.interval = first(median_household_income.interval)) %>%
+       ungroup() %>% ungroup()
+
+ggplot(filter(tmp, !is.na(median_household_income.interval)),
+       aes(median_household_income.interval, n_contb,
+           color = cand_party)) +
+  geom_point(position = "jitter") +
+  scale_color_manual(values = main_party_colors) +
+  ggtitle("Number of Contributions by Candidates") +
+  facet_wrap(~cand_nm_last)
+```
+
+* Sanders got much more number of contributions from low and middle income areas
+ then Clinton.
+
+```{r echo=FALSE, Multivariate_Plots_3}
+tmp <- filter(pcf, cand_party %in% c('D','R'))
 ggplot(tmp, aes(x=contb_receipt_dt,y=contb_receipt_amt)) +
   geom_point(alpha = 1/10, position = 'jitter',
              aes(color = cand_party), show.legend = F) +
@@ -180,519 +826,370 @@ ggplot(tmp, aes(x=contb_receipt_dt,y=contb_receipt_amt)) +
              aes(yintercept = Y))
 ```
 
-* Amount of contribution slows down as date approaches closer, however number of
-  contributions are still more than Republicans.
-* Horizontal line shows median of contribution.
+* Republican contribution increases at the end of the period.
+* Democrats contribution keeps going down and it went below median line at the
+  end of the period.
 
-### Density Plot: Contribution Amount by Party
 
-```{r}
-tmp <- subset(pcf, cand_party %in% c('R','D'))
-ggplot(tmp, aes(x = contb_receipt_amt, fill = cand_party)) +
-  geom_density(adjust = 1, alpha = .6) +
-  scale_x_continuous(breaks = seq(0,750,50)) +
-  coord_cartesian(xlim = quantile(tmp$contb_receipt_amt, probs = c(0,.95))) +
-  scale_fill_manual(values=main_party_colors,name=NULL,labels=main_party_names) +
-  labs(
-    title='Density Plot: Republican vs Democrates',
-    x='Contribution Amount (95%)',
-    y='Density' ) +
-  theme(legend.position = 'top')
-```
-
-* Democrates received many small amount contributions.
-* Republicans received less in number but big contributions.
-
-### Density Plot: Contribution Amount between Sanders and Clinton
-
-```{r}
-tmp <- subset(pcf, cand_nm_last %in% c('Clinton', 'Sanders'))
-ggplot(tmp, aes(x = contb_receipt_amt, fill = cand_nm_last)) +
-  geom_density(adjust = 1, alpha = 0.6) +
-  scale_x_continuous(breaks = seq(0,750,50)) +
-  coord_cartesian(xlim = quantile(tmp$contb_receipt_amt, probs = c(0,.95))) +
-  scale_fill_manual(values=c('#BF3EFF','#EEEE00'),name=NULL) +
-  labs(
-    title='Density Plot: Sanders vs Clinton',
-    x='Contribution Amount (95%)',
-    y='Density') +
-    theme(legend.position = 'top')
-```
-
-* Sanders received many small amount of contributions.
-
-## Contribution Amount by Candidates
-
-```{r}
-
-# compute quantile, mean and number of contributions by candidates
-df <- pcf %>%
-  group_by(cand_nm_last, cand_party) %>%
-  summarise(
-    '0%'=quantile(contb_receipt_amt, .0),
-    '25%'=quantile(contb_receipt_amt, .25),
-    '50%'=quantile(contb_receipt_amt, .50),
-    '75%'=quantile(contb_receipt_amt, .75),
-    '100%'=quantile(contb_receipt_amt, 1),
-    'mean'=mean(contb_receipt_amt),
-    'contb_amt'=sum(contb_receipt_amt),
-    'contbs' = n()
-  ) %>%
-  ungroup() %>%
-  arrange(desc(contbs))
-
-# add proportion of contribution amount
-df$prop_of_contb_amt <- with(df, round(contb_amt / sum(contb_amt), digits = 3))
-
-# add proportion of number of contributions
-df$prop_of_contb <- with(df, round(contbs / sum(contbs), digits = 3))
-
-# computer partywise proporation for each candidates
-tmp <- summarise( group_by(df, cand_party),
-                    party_contb_amt = sum(contb_amt),
-                    party_contbs = sum(contbs))
-
-df <- merge(df, tmp, by.x = 'cand_party', by.y = 'cand_party')
-
-df$prop_of_party_contb_amt <- with(df, round(contb_amt/party_contb_amt, digits = 3))
-df$prop_of_party_contbs    <- with(df, round(contbs/party_contbs, digits = 3))
-
-# show table
-kable(arrange(select(df,-matches('^party')),
-        cand_party, -prop_of_party_contb_amt),
-        caption = 'Contribution by Candidates')
-```
-
-* Sanders received `54%` of total contributors, however only `16%`
-  of total contribution amount. `75%` of his contributions are less than
-  `$50.00`.
-* Clinton received `30%` of total contributors, and `45%` of total
-  contribution amount.
-* Mean and Median of Bush's contribution is very high compare to other
-  candidates. He got big individual contributions.
-
-### Plot by Candidates
-
-* Since we have too many candidates, we consider only those, who got
-    + more than `5%` of total contribution or
-    + more than `5%` of total number of contributions.
-
-```{r}
-# main candidates got more than 5% of total contribution amount or
-# more than 5% of total number of contributions
-main_candidates <- as.character(with(df,
-            df[prop_of_contb_amt > .05 | prop_of_contb > .05, 'cand_nm_last']))
-```
-
-#### Boxplot by Candidates
-
-```{r}
-tmp <- subset(pcf, cand_nm_last %in% main_candidates)
-ggplot(tmp, aes(x=cand_nm_last,y=contb_receipt_amt)) +
-  geom_boxplot(aes(color = cand_party), show.legend = F) +
-  scale_color_manual(values=main_party_colors) +
-  coord_cartesian(ylim = quantile(tmp$contb_receipt_amt, probs = c(0,.99))) +
-  labs( title = 'Boxplot 99% of Contribution Amount by Main Candidate',
-            x = 'Candidate',
-            y = 'Contribution Amount') +
-  facet_wrap(~cand_party, scales = 'free_x')
-```
-
-#### Scatter Plot of Contribution Amount by Date by Candidates
-
-```{r}
-tmp <- subset(pcf, cand_nm_last %in% main_candidates)
-
-ggplot(tmp, aes(x=contb_receipt_dt, y=contb_receipt_amt)) +
+```{r echo=FALSE, Multivariate_Plots_4}
+tmp <- filter(pcf, cand_nm_last %in% main_candidates)
+ggplot(tmp, aes(x=contb_receipt_dt,y=contb_receipt_amt)) +
   geom_point(alpha = 1/10, position = 'jitter',
-            aes(color = cand_party), show.legend = F) +
-  scale_x_date(breaks = date_breaks("6 months"), labels=date_format("%m/%Y")) +
-  scale_y_log10() +
+             aes(color = cand_party), show.legend = F) +
   geom_smooth(se = F) +
-  scale_color_manual(values=main_party_colors, labels=main_party_names) +
+  scale_color_manual(values=main_party_colors) +
+  scale_x_date(breaks = date_breaks("3 months"), labels=date_format("%m/%Y")) +
+  scale_y_log10() +
   coord_cartesian(ylim = quantile(tmp$contb_receipt_amt, probs = c(0,.99))) +
   labs(title = '99% of Contribution Amount by Date',
            x = 'Contribution Received Date',
-           y = 'Contribution Amount(log10)') +
-  facet_wrap(cand_party ~ cand_nm_last) +
-  geom_hline(data = summarise(group_by(tmp, cand_party, cand_nm_last),
-                    Y = median(contb_receipt_amt)), aes(yintercept = Y))
+           y = 'Contribution Amount (log10)') +
+  geom_hline(data = summarise(group_by(tmp, cand_nm_last),
+                              Y = median(contb_receipt_amt)),
+             aes(yintercept = Y)) +
+  facet_wrap(~cand_nm_last)
 ```
 
-* Bush's contribution reduced significantly.
-* All candidate's contribution reduced over time. Clinton started high
-  but reduced closely to Sanders. Sanders didnt start that high.
+* All contributions decline over period of time. However, Bush is very steep.
+* Clinton started getting very early and stayed at median line till end of the
+  period.
+* Sanders got more number of contributions in the end but amount went below
+ median line.
 
-## Frequency Plot for Contribution Amount
+# Multivariate Analysis
 
-```{r}
-# 95% of contributions
-qplot(x = contb_receipt_amt, data = pcf, binwidth = 25, fill = cand_party) +
-   scale_fill_manual(values=party_colors,name=NULL,labels=party_names) +
-   scale_x_continuous(breaks = seq(0, max(pcf$contb_receipt_amt), 100)) +
-   coord_cartesian(xlim = quantile(pcf$contb_receipt_amt, probs = c(0,.99))) +
-   labs(title = 'Frequency Count of 99% of Total Contributions',
-            x = 'Contributions Amount',
-            y = 'Frequency Count') +
-   theme(legend.position = 'top')
-```
+### Talk about some of the relationships you observed in this part of the investigation. Were there features that strengthened each other in terms of looking at your feature(s) of interest?
 
-* This plot shows Democrats got many small amounts of contributions.
-* While Republicans got similar proportions of large amount of contributions.
+* Between Sanders and Clinton (who got most of the contribution), Sanders received
+ more number of contributions (`54%`), however his total contribution amount is significantly
+ less (`15%`).
 
+* In Republican candidates Cruz and Carson got more contribution from low and middle income areas.
 
-## Median Household Income
+### Were there any interesting or surprising interactions between features?
 
-* Here, we are trying to see if median household income has any effect on contributions.
-  That is if there a correlation exists between contribution amount and party and/or candidates.
+* That Sanders was more popular in low and middle income areas, still his contribution amount was significantly less than Clinton.
 
-* We download ACS 5-year estimates data.
-    + MEDIAN HOUSEHOLD INCOME IN THE PAST 12 MONTHS (IN 2014 INFLATION-ADJUSTED DOLLARS),
-    + 2010-2014 American Community Survey 5-Year Estimates,
-    + [factfinder.census.gov](http://factfinder.census.gov/faces/tableservices/jsf/pages/productview.xhtml?pid=ACS_14_5YR_B19013)
+### OPTIONAL: Did you create any models with your dataset? Discuss the strengths and limitations of your model.
 
-### Read Data
-
-```{r}
-datafile <- 'ACS_14_5YR_B19013_with_ann.csv'
-
-acs_mhi <- read.csv(datafile, skip = 1, as.is = T,
-  colClasses = c("zip" = "character", "median_household_income" = "numeric"),
-  col.names = c('skip1', 'zip', 'skip2', 'median_household_income', 'skip3'),
-  na.strings = c("-"))
-
-acs_mhi <- select(acs_mhi, -grep('skip', names(acs_mhi)))
-head(acs_mhi)
-str(acs_mhi)
-```
-
-### Merge with PCF data.
-
-* Here, we are doing it partywise and consider only 2 parties- Democrates
-  and Republicans.
-
-```{r}
-# compute median contribution amount by party.
-tmp <- merge(
-  pcf %>% filter(cand_party %in% c('R', 'D')) %>%
-            group_by(contbr_zip, cand_party) %>%
-            summarise(median_contb_amt = median(contb_receipt_amt), n_contb = n()) %>%
-            ungroup(),
-  acs_mhi,
-  by.x = 'contbr_zip',
-  by.y = 'zip'
-  )
-
-# scatter plot between median_household_income and median_contb_amt
-p1 <- ggplot(tmp, aes(median_household_income, median_contb_amt)) +
-  geom_point(aes(color = cand_party)) +
-  scale_y_log10() +
-  facet_grid(~cand_party) +
-  scale_color_manual(values=main_party_colors,name=NULL,labels=main_party_names) +
-  labs(title = 'Contribution Amount by Median Household Income',
-       x = 'Median Household Income',
-       y = 'Median Contribution Amount (log10)') +
-  theme(legend.position = 'top')
-
-# scatter plot between median_household_income and number of contributions
-p2 <- ggplot(tmp, aes(median_household_income, n_contb)) +
-  geom_point(aes(color = cand_party),show.legend = F) +
-  scale_y_log10() +
-  facet_grid(~cand_party) +
-  scale_color_manual(values=main_party_colors,name=NULL,labels=main_party_names) +
-  labs(title = 'Number of Contributions by Median Household Income',
-       x = 'Median Household Income',
-       y = 'Number of Contributions (log10)')
-
-# show in grid
-grid.arrange(p1,p2)
-```
-
-* Republicans get more or similar number of contributions as median household income increases.
-* Democrates get more numer of contributions at lower median household income.
-* Median contribution amout is lower for Democrates at every median household income level.
-
-### Compute correlation by Party
-
-* For each main party (D and R), we compute correlation between
-    + median_household_income, n_contb (number of contributions)
-    + median_household_income, median_contb_amt
-
-```{r}
-# group by party
-tmp <- group_by(tmp, cand_party) %>% summarise(
-          cor(median_household_income, n_contb, use = 'pairwise.complete.obs'),
-          cor(median_household_income, median_contb_amt, use = 'pairwise.complete.obs'))
-
-# change col names
-names(tmp) <- c('Party',
-                'cor(median_household_income,n_contb)',
-                'cor(median_household_income,median_contb_amt)')
-
-# show table
-kable(tmp)
-```
-
-* Republicans have higher correlation between median houshold income and number of contributions.
-  That is, as median houshold income increases for a zipcode, number of contributions increases too.
-
-## Contribution by Median Household Income by Candidates
-
-```{r}
-tmp <- merge( filter(pcf, cand_nm_last %in% main_candidates) %>%
-                group_by(contbr_zip, cand_nm_last) %>%
-                summarise(
-                  median_contb_amt = median(contb_receipt_amt),
-                  n_contb = n()
-                ) %>% ungroup(),
-              acs_mhi,
-              by.x = 'contbr_zip',
-              by.y = 'zip')
-
-p1 <- ggplot(tmp, aes(median_household_income, median_contb_amt)) +
-  geom_point(aes(color = cand_nm_last), show.legend = F) +
-  scale_y_log10() +
-  facet_wrap(~cand_nm_last) +
-  labs(title = 'Contribution Amount by Median Household Income',
-       x = 'Median Household Income',
-       y = 'Median Contribution Amount (log10)') +
-  theme(legend.position = 'top')
-
-p2 <- ggplot(tmp, aes(median_household_income, n_contb)) +
-  geom_point(aes(color = cand_nm_last), show.legend = F) +
-  scale_y_log10() +
-  facet_wrap(~cand_nm_last) +
-  labs(title = 'Number of Contributions by Median Household Income',
-       x = 'Median Household Income',
-       y = 'Number of Contributions (log10)')
-
-grid.arrange(p1,p2)
-
-tmp <- group_by(tmp, cand_nm_last) %>% summarise(
-          cor(median_household_income, n_contb, use = 'pairwise.complete.obs'),
-          cor(median_household_income, median_contb_amt, use = 'pairwise.complete.obs'))
-
-names(tmp) <- c('Candidate',
-                'cor(median_household_income,n_contb)',
-                'cor(median_household_income,median_contb_amt)')
-
-kable(tmp)
-```
-
-* Here, Sanders seems to have high number of contributions from low median household income zipcodes.
-  However his median contribution amount is way lower than all other candidates. That is, he got many
-  small contributions from low median household income zipcodes.
+------
 
 # Final Plots and Summary
 
-## Frequency Plot for Contribution Amount
+### Plot One
+```{r echo=FALSE, Plot_One}
+# For final plot 1, there are a lot of candidates that have very small
+# percentages (and thus small bars). Consider grouping some of the
+# Republican candidates into an 'other Republicans' category. This will
+# help to focus on the important candidates in the plot especially since
+# the findings only mention Hillary and Clinton.
+tmp <- group_by(pcf, cand_nm_last) %>%
+  summarise(
+    contb_receipt_amt = sum(contb_receipt_amt),
+    n_contb = n(),
+    cand_party = first(cand_party))
 
-* This plot shows Democrates got vast majority of small contributions.
+tot_contb_receipt_amt <- sum(tmp$contb_receipt_amt)
+tot_n_contb <- sum(tmp$n_contb)
 
-```{r}
-# 95% of contributions
-qplot(x = contb_receipt_amt, data = pcf, binwidth = 25, fill = cand_party) +
-   scale_fill_manual(values=party_colors,name=NULL,labels=party_names) +
-   scale_x_continuous(breaks = seq(0, max(pcf$contb_receipt_amt), 100)) +
-   coord_cartesian(xlim = quantile(pcf$contb_receipt_amt, probs = c(0,.99))) +
-   labs(title = 'Frequency Count of 99% of Total Contributions',
-            x = 'Contributions Amount',
-            y = 'Frequency Count') +
-   theme(legend.position = 'top')
-```
+tmp$prop_contb_receipt_amt <- round(tmp$contb_receipt_amt/tot_contb_receipt_amt, 2)
+tmp$prop_n_contb <- round(tmp$n_contb/tot_n_contb, 2)
 
-* If we go further and plot by main candidates, we can see Sanders got most part of small contributions.
+party_labels <- function(cand_party) {
+         if (cand_party == 'R') 'Other Republicans'
+    else if (cand_party == 'D') 'Other Democrats'
+    else if (cand_party == 'G') 'Other Greens'
+    else if (cand_party == 'L') 'Other Libertarians'
+    else 'Unknown'
+  }
 
-```{r}
+# add candidates who received less than 4% contribution
+tmp2 <- filter(tmp, prop_contb_receipt_amt < 0.04) %>%
+  group_by(cand_party) %>%
+    summarise(
+      cand_nm_last = party_labels(first(cand_party)),
+      contb_receipt_amt = sum(contb_receipt_amt),
+      n_contb = sum(n_contb))
 
-tmp <- filter(pcf, cand_nm_last %in% main_candidates)
+tmp2$prop_contb_receipt_amt <- round(tmp2$contb_receipt_amt/tot_contb_receipt_amt, 2)
+tmp2$prop_n_contb <- round(tmp2$n_contb/tot_n_contb, 2)
 
-qplot(x = contb_receipt_amt, data = tmp, binwidth = 25, fill = cand_party) +
-   scale_fill_manual(values=main_party_colors,name=NULL,labels=main_party_names) +
-   scale_x_continuous(breaks = seq(0, max(tmp$contb_receipt_amt), 200)) +
-   coord_cartesian(xlim = quantile(tmp$contb_receipt_amt, probs = c(0,.99))) +
-   labs(title = 'Frequency Count of 99% of Total Contributions',
-            x = 'Contributions Amount',
-            y = 'Frequency Count') +
-   theme(legend.position = 'top') +
-  facet_wrap(cand_party~cand_nm_last)
-```
+tmp3 <- filter(rbind(filter(tmp, prop_contb_receipt_amt >= 0.04), tmp2),
+               prop_contb_receipt_amt > 0) # exclude 0% candidates
 
-# Bar chart for Contribution Amount and Number of Contributions
+p <- function(n) { paste0(n * 100, sep = '%') } # make % string
 
-* Sanders got `54%` of total number of contributions and received `16%` of total contribution amount.
-* Clinton got `30%` of total number of contributions and received `45%` of total contribution amount.
-* Bush got `1%` of total number of contributions and received `12%` of total contribution amount.
+# For final plot 1, please spell out the full names in the axis labels
+# as the final plots should be as polished as possible. Also, include the
+# units for any dollar amounts (ie 'USD').
 
-```{r}
-tmp <- group_by(pcf, cand_nm_last, cand_party) %>%
-        summarise(
-          contb_receipt_amt = sum(contb_receipt_amt),
-          n_contb = n()) %>%
-        ungroup()
-
-total_contb_receipt_amt <- sum(tmp$contb_receipt_amt)
-
-p <- function(n){paste0(n*100,sep = '%')} # make % string
-
-p1 <- ggplot(data=tmp, aes(x=cand_nm_last, y=contb_receipt_amt)) +
-  geom_bar(stat='identity', aes(fill=cand_party)) +
-  geom_text(aes(label=p(round(contb_receipt_amt/total_contb_receipt_amt,digits = 2))), vjust=-0.25) +
-  scale_fill_manual(values=party_colors,name=NULL,labels=party_names) +
+p1 <- ggplot(tmp3,
+             aes(x = cand_nm_last, y = contb_receipt_amt, fill = cand_party)) +
+  geom_bar(stat = 'identity', show.legend = F) +
+  geom_text(aes( label = p(tmp3$prop_contb_receipt_amt), hjust = -0.25)) +
+  scale_fill_manual(values = main_party_colors) +
   scale_y_continuous(labels = dollar) +
-  theme(legend.position = 'top') +
-  labs( title = 'Total Contribution Amount by Candidates',
-        x = 'Candidate', y = 'Total Contribution Amount')
+  coord_flip() +
+  labs(x = 'Candidates', y = 'Contributon Amount (USD)',
+       title = 'Contribution Amount by Candidates')
 
-total_n_contb <- sum(tmp$n_contb)
+# add candidates who received less than 1% of number of contributions
+tmp2 <- filter(tmp, tmp$prop_n_contb < 0.01) %>%
+  group_by(cand_party) %>%
+    summarise(
+      cand_nm_last = party_labels(first(cand_party)),
+      contb_receipt_amt = sum(contb_receipt_amt),
+      n_contb = sum(n_contb))
 
-p2 <- ggplot(data=tmp, aes(x=cand_nm_last, y=n_contb)) +
-  geom_bar(stat='identity', aes(fill=cand_party), show.legend = F) +
-  geom_text(aes(label=p(round(n_contb/total_n_contb,digits = 2))), vjust=-0.25) +
-  scale_fill_manual(values=party_colors,name=NULL,labels=party_names) +
-  scale_y_continuous(labels = comma) +
-  labs( title = 'Total Number of Contributions by Candidates',
-        x = 'Candidate', y = 'Total Number of Contributions')
+tmp2$prop_contb_receipt_amt <- round(tmp2$contb_receipt_amt/tot_contb_receipt_amt, 2)
+tmp2$prop_n_contb <- round(tmp2$n_contb/tot_n_contb, 2)
 
-grid.arrange(p1, p2)
-```
+tmp4 <- filter(rbind(filter(tmp, prop_n_contb >= 0.01), tmp2),
+               prop_n_contb > 0) # exclude 0% candidates
 
-# Contribution and Median Household Income
-
-## By Candidates
-
-* Sanders got higher number of contributions from low median household income zipcodes.
-  However his median contribution amount is way lower than all other candidates.
-  That is, he got many small contributions from low median household income zipcodes.
-* Clinton got higher median contribution amount with same or higher number of
-  contributors from high median income zipcodes.
-* Bush has higher number of contributors from high median income zipcodes, this also
-  shows by correlation cofficient.
-
-```{r}
-tmp <- merge( filter(pcf, cand_nm_last %in% main_candidates) %>%
-                group_by(contbr_zip, cand_nm_last) %>%
-                summarise(
-                  median_contb_amt = median(contb_receipt_amt),
-                  n_contb = n()
-                ) %>% ungroup(),
-              acs_mhi,
-              by.x = 'contbr_zip',
-              by.y = 'zip')
-
-p1 <- ggplot(tmp, aes(median_household_income, median_contb_amt)) +
-  geom_point(aes(color = cand_nm_last), show.legend = F) +
-  scale_y_log10() +
-  facet_wrap(~cand_nm_last) +
-  labs(title = 'Contribution Amount by Median Household Income',
-       x = 'Median Household Income',
-       y = 'Median Contribution Amount (log10)') +
-  theme(legend.position = 'top')
-
-p2 <- ggplot(tmp, aes(median_household_income, n_contb)) +
-  geom_point(aes(color = cand_nm_last), show.legend = F) +
-  scale_y_log10() +
-  facet_wrap(~cand_nm_last) +
-  labs(title = 'Number of Contributions by Median Household Income',
-       x = 'Median Household Income',
-       y = 'Number of Contributions (log10)')
+p2 <- ggplot(tmp4, aes(x = cand_nm_last, y = n_contb, fill = cand_party)) +
+  geom_bar(stat = 'identity', show.legend = F) +
+  geom_text(aes(label = p(tmp4$prop_n_contb), hjust = -0.25)) +
+  scale_fill_manual(values = main_party_colors) +
+  coord_flip() +
+  labs(x = 'Candidates', y = 'Number of Contributons',
+       title = 'Number of Contributions by Candidates')
 
 grid.arrange(p1,p2)
 ```
 
-* Computer correlation for each main candidate, between
-    + median_household_income and n_contb
-    + median_household_income and median_contb_amt
+### Description One
+* Amount of contribution and number of contributions per candidate, shows that
+ Democrats got most of the contribution and with Democrats Sanders got most
+ number of contributions while Clinton got most amount.
 
-```{r}
-tmp <- group_by(tmp, cand_nm_last) %>% summarise(
-          cor(median_household_income, n_contb, use = 'pairwise.complete.obs'),
-          cor(median_household_income, median_contb_amt, use = 'pairwise.complete.obs'))
+### Plot Two
+```{r echo=FALSE, Plot_Two}
+# median_contb_receipt_amt by zip and party
+tmp <- group_by(pcf, contbr_zip, cand_party) %>%
+       summarise(
+        median_household_income  = first(median_household_income),
+        median_contb_receipt_amt = median(contb_receipt_amt),
+        n_contb                  = n()) %>%
+       ungroup()
 
-names(tmp) <- c('Candidate',
-                'cor(median_household_income,n_contb)',
-                'cor(median_household_income,median_contb_amt)')
+tmp2 <- melt(cor_(
+  filter(tmp, cand_party == 'D') %>%
+  select(
+    n_contb,
+    median_household_income,
+    median_contb_receipt_amt)
+  ))
 
-kable(tmp)
+p1 <- ggplot(data=tmp2, aes(x=Var1, y=Var2, fill=value)) +
+  geom_tile(colour = "white") +
+  scale_fill_gradient2(
+    low="blue", high="red", mid="white", midpoint=0, limit = c(-1,1), name="") +
+  geom_text(aes(Var2, Var1, label = round(value,digits=2))) +
+  theme_minimal() +
+  labs(x="",y="",title="Democrats")
+
+tmp2 <- melt(cor_(
+  filter(tmp, cand_party == 'R') %>%
+  select(
+    n_contb,
+    median_household_income,
+    median_contb_receipt_amt)
+  ))
+
+p2 <- ggplot(data=tmp2, aes(x=Var1, y=Var2, fill=value)) +
+  geom_tile(colour = "white") +
+  scale_fill_gradient2(low="blue", high="red", mid="white", midpoint=0, limit = c(-1,1), name="") +
+  geom_text(aes(Var2, Var1, label = round(value,digits=2))) +
+  theme_minimal() +
+  labs(x="",y="",title="Republicans")
+
+grid.arrange(p1, p2, top="Correlation Heatmap by Zipcode")
 ```
 
-## By Party
+### Description Two
+* Plot shows correlation between median contribution receipt amount, median
+ household income and number of contributions by Democratic and Republican parties.
+* Here, for each zipcode median household income, median contribution amount
+ and number of contributions are used.
+* This plot shows that Republicans have higher correlation between median household income
+ and number of contributions.
+* Since correlation is lower (`0.44`) this is not strong indication, but relatively it could
+ mean Republicans received more number of contribution from the higher median household income
+ areas.
 
-* Here, we are doing it partywise and consider only 2 parties- Democrates
-  and Republicans.
+### Plot Three
+```{r echo=FALSE, Plot_Three}
+# For final plot 3, please consider applying a log-transformation to
+# contribution amount as mentioned earlier in the review.
 
-```{r}
-# compute median contribution amount by party.
-tmp <- merge(
-  pcf %>% filter(cand_party %in% c('R', 'D')) %>%
-            group_by(contbr_zip, cand_party) %>%
-            summarise(median_contb_amt = median(contb_receipt_amt), n_contb = n()) %>%
-            ungroup(),
-  acs_mhi,
-  by.x = 'contbr_zip',
-  by.y = 'zip'
+# boxplot of contribution amount by party
+tmp <- filter(pcf, cand_nm_last %in% candidates)
+ggplot(tmp, aes(x=cand_nm_last,y=contb_receipt_amt)) +
+  geom_boxplot(aes(color = cand_nm_last), show.legend = F) +
+  coord_cartesian(ylim = quantile(tmp$contb_receipt_amt, probs = c(0,.99))) +
+  scale_y_log10() +
+  labs(title = 'Boxplot 99% of Contribution Amount (log10) by Candidates',
+           x = 'Candidates',
+           y = 'Contribution Amount (USD)') +
+  theme(legend.position = 'top')
+
+```
+
+### Description Three
+* This plot gives some idea about size of most contribution amount to a candidates.
+* Bush received about `12%` of total contribution amount, his median contribution amount is
+ much higher (`2500`), implies he received small number of higher amount contributions.
+* Sanders median contribution amount is lowest (`27`), with `90%` contributions under `100`.
+* Clinton has higher median contribution amount (`35`) with `90%` contributions under `500`.
+* Contribution amount is much distributed in the Republican candidates, they received
+ `39%` of contribution amount but no single candidate got more than `12%`.
+* For Democrats contribution amount is between Clinton and Sanders only.
+* Interesting fact is that, Sanders received `54%` of contributions which is way
+ higher than any candidate, second on Clinton with `30%`.
+
+```{r echo=FALSE, Plot_IQR}
+tmp <- select(pcf, cand_nm_last, cand_party, contb_receipt_amt)
+
+# > levels(tmp$cand_party)
+# [1] "D" "G" "L" "R"
+combined_cand_nm <- c('Other Democrats<sup>1</sup>',
+                      'Stein',
+                      'Johnson',
+                      'Other Republicans<sup>2</sup>')
+
+cand_nm_xlat <- tmp %>%
+  group_by(cand_nm_last) %>%
+  summarise(
+    prop_contb_receipt_amt =
+      round(sum(contb_receipt_amt) / sum(tmp$contb_receipt_amt), 2),
+    prop_n_contb = round(n() / nrow(tmp), 2),
+    cand_party = first(cand_party),     # less than 4% are Others
+    cand_nm_new = ifelse(prop_contb_receipt_amt < 0.04 & prop_n_contb < 0.04,
+                          combined_cand_nm[[cand_party]],
+                          levels(cand_nm_last)[cand_nm_last])
   )
 
-# scatter plot between median_household_income and median_contb_amt
-p1 <- ggplot(tmp, aes(median_household_income, median_contb_amt)) +
-  geom_point(aes(color = cand_party)) +
-  scale_y_log10() +
-  facet_grid(~cand_party) +
-  scale_color_manual(values=main_party_colors,name=NULL,labels=main_party_names) +
-  labs(title = 'Contribution Amount by Median Household Income',
-       x = 'Median Household Income',
-       y = 'Median Contribution Amount (log10)') +
-  theme(legend.position = 'top')
+tmp$cand_nm_last <- sapply(tmp$cand_nm_last, function(nm) {
+  cand_nm_xlat[cand_nm_xlat$cand_nm_last == nm, ]$cand_nm_new
+  })
 
-# scatter plot between median_household_income and number of contributions
-p2 <- ggplot(tmp, aes(median_household_income, n_contb)) +
-  geom_point(aes(color = cand_party),show.legend = F) +
-  scale_y_log10() +
-  facet_grid(~cand_party) +
-  scale_color_manual(values=main_party_colors,name=NULL,labels=main_party_names) +
-  labs(title = 'Number of Contributions by Median Household Income',
-       x = 'Median Household Income',
-       y = 'Number of Contributions (log10)')
+# all
+tmp_all <- data.frame(
+            cand_nm_last      = 'All',
+            cand_party        = 'All',
+            contb_receipt_amt = sum(tmp$contb_receipt_amt),
+            n_contb           = nrow(tmp),
+            '0%'              = quantile(tmp$contb_receipt_amt, prob = 0),
+            '25%'             = quantile(tmp$contb_receipt_amt, prob = .25),
+            '50%'             = quantile(tmp$contb_receipt_amt, prob = .5),
+            '90%'             = quantile(tmp$contb_receipt_amt, prob = .9),
+            '100%'            = quantile(tmp$contb_receipt_amt, prob = 1),
+            'mean'            = round(mean(tmp$contb_receipt_amt),2),
+            check.names = FALSE
+          )
 
-# show in grid
-grid.arrange(p1,p2)
+# party wise
+# > levels(tmp$cand_party)
+# [1] "D" "G" "L" "R"
+party_labels <- c('All Democrats',
+                  'All Greens',
+                  'All Libertarians',
+                  'All Republicans')
+
+tmp_party <- tmp %>%
+  filter(!cand_party %in% c('G', 'L')) %>% # since G and L has only 1 candidate
+  group_by(cand_party) %>%
+  summarise(
+    cand_nm_last        = party_labels[[first(cand_party)]],
+    contb_receipt_amt_1 = sum(contb_receipt_amt),
+    n_contb             = n(),
+    '0%'                = quantile(contb_receipt_amt, prob = 0),
+    '25%'               = quantile(contb_receipt_amt, prob = .25),
+    '50%'               = quantile(contb_receipt_amt, prob = .5),
+    '90%'               = quantile(contb_receipt_amt, prob = .9),
+    '100%'              = quantile(contb_receipt_amt, prob = 1),
+    'mean'              = round(mean(contb_receipt_amt),2)
+  )
+
+# same name messes up quantile !
+names(tmp_party)[names(tmp_party) == "contb_receipt_amt_1"] <- "contb_receipt_amt"
+
+# candidate wise
+tmp_candidates <- tmp %>%
+  group_by(cand_nm_last) %>%
+  summarise(
+    cand_party          = first(cand_party),
+    contb_receipt_amt_1 = sum(contb_receipt_amt),
+    n_contb             = n(),
+    '0%'                = quantile(contb_receipt_amt, prob = 0),
+    '25%'               = quantile(contb_receipt_amt, prob = .25),
+    '50%'               = quantile(contb_receipt_amt, prob = .5),
+    '90%'               = quantile(contb_receipt_amt, prob = .9),
+    '100%'              = quantile(contb_receipt_amt, prob = 1),
+    'mean'              = round(mean(contb_receipt_amt),2)
+  ) %>%
+  arrange(cand_party, cand_nm_last)
+
+# same name messes up quantile !
+names(tmp_candidates)[names(tmp_candidates) == "contb_receipt_amt_1"] <- "contb_receipt_amt"
+
+# combine all
+prop <- function(f,t) {paste0(round(f / t, 2)*100,"%")}
+
+tot_contb   <- tmp_all$contb_receipt_amt
+tot_n_contb <- tmp_all$n_contb
+tmp_f       <- mutate(rbind(tmp_all, tmp_party, tmp_candidates),
+                '%contb_receipt_amt' = prop(contb_receipt_amt, tot_contb),
+                '%n_contb'           = prop(n_contb, tot_n_contb)
+               )
+
+# build table
+kable(
+  rbind(
+    filter(tmp_f, grepl("^All",cand_nm_last)),                               # All
+    filter(tmp_f, cand_party=='D' & !grepl("^(All|Other)",cand_nm_last)) %>%
+      arrange(desc(contb_receipt_amt, n_cont)),                              # Democrats
+    filter(tmp_f, cand_party=='D' & grepl("^Other",cand_nm_last)),           # Other Democrats
+    filter(tmp_f, cand_party=='R' & !grepl("^(All|Other)",cand_nm_last)) %>%
+      arrange(desc(contb_receipt_amt, n_cont)),                              # Republicans
+    filter(tmp_f, cand_party=='R' & grepl("^Other",cand_nm_last)),           # Other Republicans
+    filter(tmp_f, !cand_party %in% c('R','D','All')) %>%
+      arrange(desc(contb_receipt_amt, n_cont))                               # L and G
+  ),
+  col.names = c('Name',
+                'Party',
+                'Contribution Amount',
+                'Number of Contributions',
+                '0%','25%','50%','90%','100%',
+                'Avg Contribution Amount',
+                '% of Total Contribution Amount',
+                '% of Total Number of Contributions'),
+  align   = c('l','c','r','r','r','r','r','r','r','r','r','r'),
+  caption = 'Contribution Summary'
+)
 ```
 
-* Republicans get more or similar number of contributions as median household income increases.
-* Democrates get more numer of contributions at lower median household income.
-* Median contribution amout is lower for Democrates at every median household income level.
-
-### Compute correlation by Party
-
-* For each main party (D and R), we compute correlation between
-    + median_household_income, n_contb (number of contributions)
-    + median_household_income, median_contb_amt
-
-```{r}
-# group by party
-tmp <- group_by(tmp, cand_party) %>% summarise(
-          cor(median_household_income, n_contb, use = 'pairwise.complete.obs'),
-          cor(median_household_income, median_contb_amt, use = 'pairwise.complete.obs'))
-
-# change col names
-names(tmp) <- c('Party',
-                'cor(median_household_income,n_contb)',
-                'cor(median_household_income,median_contb_amt)')
-
-# show table
-kable(tmp)
-```
-
-* Republicans have higher correlation between median houshold income and number of contributions.
-  That is, as median houshold income increases for a zipcode, number of contributions increases too.
-
+* <sup>1</sup> Combined Democrate candidates who have received less than 4% of
+ total contribution amount and less than 4% of total number of contributions.
+* <sup>2</sup> Combined Republican candidates who have received less than 4% of
+ total contribution amount and less than 4% of total number of contributions.
 
 # Reflection
 
-* Democratic party got over 60% of contribution, with Clinton is getting 45% and Sanders is getting 16%.
-* Sanders got many small contributions compare to anyone else, he received from 54% of contributors.
-* Republican contribution is divided between many candidates- Bush, Rubio and Cruz we leading receivers of contribution.
-* Bush received 1% of big contributions, which made him receive 12% of total contributions.
-* There is some relation between median household income of zipcode and amount contributed by that zipcode. However, it is not apparent in correlation cofficent.
-    + For example, there is no strong correlation between amount received by Parties and median household income.
-    + There is some correlation between number of contributions and median household income. For Republican party this is `.43`, and for candidates Bush has '.35'.
+```{r echo=FALSE}
+# The section reflects on how the analysis was conducted and reports on
+# the struggles and successes throughout the analysis. The section provides
+# at least one idea or question for future work. The section explains any
+# important decisions in the analysis and how those decisions affected
+# the analysis.
+```
+
+* Goal of analysis was to find some correlation between median household income and contribution amount to candidates and parties. However, we have not find any strong correlation, except Republican Party has `.44` correlation between median household income and number of contribution and even this number is not too strong.
+* We try to analyze the distribution of contribution over time and by candidates and by parties, explained using visualization.
+* Since, most of the contribution is between two candidates, Clinton and Sanders, there isn't enough data to find some kind of trends.
+* In future, we will like to add more features and see how those affect the amount and numbers of contributions. Some of the features could be
+    - Education level by zip code in CT
+        + [B15001: SEX BY AGE BY EDUCATIONAL ATTAINMENT FOR THE POPULATION 18 YEARS AND OVER, 2010-2014 American Community Survey 5-Year Estimates](http://factfinder.census.gov/faces/tableservices/jsf/pages/productview.xhtml?pid=ACS_14_5YR_B15001)
+    - Distribution of Race and Ethnicity by zip code in CT.
+        + [DP05: ACS DEMOGRAPHIC AND HOUSING ESTIMATES more information 2010-2014 American Community Survey 5-Year Estimates](http://factfinder.census.gov/bkmk/table/1.0/en/ACS/14_5YR/DP05/0100000US)
