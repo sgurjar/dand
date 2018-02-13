@@ -1,0 +1,155 @@
+# non-negative columns
+(df.min()[df.min() >= 0]).sort(inplace=0,ascending=0)
+
+  loan_advances               400000.0
+  bonus                        70000.0
+  long_term_incentive          69223.0
+  exercised_stock_options       3285.0
+  director_fees                 3285.0
+  salary                         477.0
+  total_payments                 148.0
+  expenses                       148.0
+  to_messages                     57.0
+  from_messages                   12.0
+  shared_receipt_with_poi          2.0
+  other                            2.0
+  poi                              0.0
+  from_this_person_to_poi          0.0
+  from_poi_to_this_person          0.0
+
+#
+df.describe(percentiles=(.25,.5,.75,.99)).drop('poi',axis=1).apply(np.around, decimals=2).T.to_clipboard()
+
+                          count  mean      std         min         25%        50%       75%        99%         max
+bonus                     81.0  1201773.07 1441679.44  70000.0     425000.0   750000.0  1200000.0  7200000.0   8000000.0
+deferral_payments         38.0  841602.53  1289322.63  -102500.0   79644.5    221063.5  867211.25  5207791.9   6426990.0
+*deferred_income           48.0  -581049.81 942076.4    -3504386.0  -611209.25 -151927.0 -37926.0   -931.23     -833.0
+director_fees             16.0  89822.88   41112.7     3285.0      83674.5    106164.5  112815.0   135939.5    137864.0
+exercised_stock_options   101.0 2959559.26 5499449.6   3285.0      506765.0   1297049.0 2542813.0  30766064.0  34348384.0
+expenses                  94.0  54192.01   46108.38    148.0       22479.0    46547.5   78408.5    228663.49   228763.0
+from_messages             86.0  608.79     1841.03     12.0        22.75      41.0      145.5      7900.35     14368.0
+from_poi_to_this_person   86.0  64.9       86.98       0.0         10.0       35.0      72.25      338.45      528.0
+from_this_person_to_poi   86.0  41.23      100.07      0.0         1.0        8.0       24.75      440.7       609.0
+loan_advances             3.0   27975000.0 46382560.03 400000.0    1200000.0  2000000.0 41762500.0 79934500.0  81525000.0
+long_term_incentive       65.0  746491.2   862917.42   69223.0     275000.0   422158.0  831809.0   4156356.24  5145434.0
+other                     92.0  465276.66  1389719.06  2.0         1209.0     51984.5   357577.25  7691510.72  10359729.0
+*restricted_stock          109.0 1147424.09 2249770.36  -2604490.0  252055.0   441096.0  985032.0   13415609.12 14761694.0
+*restricted_stock_deferred 17.0  621892.82  3845528.35  -1787380.0  -329825.0  -140264.0 -72419.0   12990338.48 15456290.0
+salary                    94.0  284087.54  177131.12   477.0       211802.0   258741.0  308606.5   1075046.59  1111258.0
+shared_receipt_with_poi   86.0  1176.47    1178.32     2.0         249.75     740.5     1888.25    4676.1      5521.0
+to_messages               86.0  2073.86    2582.7      57.0        541.25     1211.0    2634.75    13113.25    15149.0
+total_payments            124.0 2623421.18 9488105.53  148.0       386380.25  1100246.5 2084662.75 16839394.8  103559793.0
+*total_stock_value         125.0 3352073.02 6532883.1   -44093.0    494136.0   1095040.0 2606763.0  29644689.92 49110078.0
+
+
+salary
+Reflects items such as base salary, executive cash allowances, and
+benefits payments.
+min=477.0, max=1111258.0
+
+bonus
+Reflects annual cash incentives paid based upon company performance. Also
+may include other retention payments.
+min=70000.0, max=8000000.0
+
+long_term_incentive
+Reflects long-term incentive cash payments from various long-term
+incentive programs designed to tie executive compensation to long-term
+success as measured against key performance drivers and business
+objectives over a multi-year period, generally 3 to 5 years.
+min=69223.0, max=5145434.0
+
+deferred_income
+Reflects voluntary executive deferrals of salary, annual cash incentives,
+and long-term cash incentives as well as cash fees deferred by
+non-employee directors under a deferred compensation arrangement. May
+also reflect deferrals under a stock option or phantom stock unit in
+lieu of cash arrangement.
+** always a negative number or NaN in the data.
+min=-3504386.0, max=-833.0
+
+deferral_payments
+Reflects distributions from a deferred compensation arrangement due
+to termination of employment or due to in-service withdrawals as per
+plan provisions.
+min=-102500.0,max=6426990.0
+
+loan_advances
+Reflects total amount of loan advances, excluding repayments, provided by
+the Debtor in return for a promise of repayment. In certain instances,
+the terms of the promissory notes allow for the option to repay with
+stock of the company.
+** Only 3 people got loan advance in input data.
+min=400000.0, max=81525000.0
+
+other
+Reflects items such as payments for severence, consulting services,
+relocation costs, tax advances and allowances for employees on
+international assignment (i.e. housing allowances, cost of living
+allowances, payments under Enron's Tax Equalization Program, etc.). May
+also include payments provided with respect to employment agreements,
+as well as imputed income amounts for such things as use of corporate
+aircraft.
+min=2.0, max=10359729.0
+
+expenses
+Reflects reimbursements of business expenses. May include fees paid for
+consulting services.
+min=148.0, max=228763.0
+
+director_fees
+Reflects cash payments and/or value of stock grants made in lieu of cash
+payments to non-employee directors.
+** 16 people got director fee
+min=3285.0,max=137864.0
+
+
+total_payments
+  salary + bonus + long_term_incentive + deferred_income +
+  deferral_payments + loan_advances + other + expenses + director_fees
+min=148.0,max=103559793.0
+
+exercised_stock_options
+Reflects amounts from exercised stock options which equal the market value
+in excess of the exercise price on the date the options were exercised
+either through cashless (same-day sale), stock swap or cash exercises.
+The reflected gain may differ from that realized by the insider due to
+fluctuations in the market price and the timing of any subsequent sale
+of the securities.
+min=3285.0, max=34348384.0
+
+
+restricted_stock
+Reflects the gross fair market value of shares and accrued dividends
+(and/or phantom units and dividend equivalents) on the date of release
+due to lapse of vesting periods, regardless of whether deferred.
+min=-2604490.0, max=14761694.0
+
+restricted_stock_deferred
+Reflects value of restricted stock voluntarily deferred prior to release
+under a deferred compensation arrangement.
+** Only 2 people got it
+min=-1787380.0,max=15456290.0
+
+total_stock_value
+  exercised_stock_options + restricted_stock + restricted_stock_deferred
+min=-44093.0,max=49110078.0
+
+email_address
+
+from_messages
+min=12.0,max=14368.0
+
+to_messages
+min=57.0,max=15149.0
+
+from_poi_to_this_person
+min=0.0,max=528.0
+
+from_this_person_to_poi
+min=0.0,max=609.0
+
+shared_receipt_with_poi
+min=2.0,max=5521.0
+
+poi (label)
